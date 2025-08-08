@@ -1,23 +1,37 @@
-mod app;
-
 use std::io;
 
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
+use crate::app::{CompletionLevel, Entry, Importance, Model, Task};
+use crossterm::event::{self, Event, KeyCode, KeyEventKind};
+use ratatui::widgets::ListItem;
 use ratatui::{
-    DefaultTerminal, Frame,
-    buffer::Buffer,
-    layout::Rect,
+    Frame,
+    layout::{Constraint, Layout},
+    style::Style,
     style::Stylize,
     symbols::border,
     text::{Line, Text},
-    widgets::{Block, Paragraph, Widget},
+    widgets::{Block, List, ListDirection, Paragraph, Widget},
 };
+
+mod app;
 
 fn main() -> io::Result<()> {
     let mut terminal = ratatui::init();
-    let mut model = Model::default();
+    let mut model = Model::new();
 
-    while model.exit != true {
+    let mut entry = Entry::new();
+    entry.push_event(app::Event::new("NAMI HERE", Importance::Extreme));
+    entry.push_event(app::Event::new("birthday!!", Importance::High));
+    entry.push_event(app::Event::new("Work", Importance::Normal));
+    entry.push_event(app::Event::new("cook dinner", Importance::Low));
+
+    entry.push_task(Task::new("code stuff today", CompletionLevel::None));
+    entry.push_task(Task::new("call nami", CompletionLevel::Partial));
+    entry.push_task(Task::new("play stardew", CompletionLevel::Full));
+
+    model.journal.insert_today(entry);
+
+    while !model.should_exit {
         terminal.draw(|frame| view(&model, frame))?;
         update(&mut model)?;
     }
@@ -25,32 +39,10 @@ fn main() -> io::Result<()> {
     Ok(())
 }
 
-#[derive(Debug, Default)]
-pub struct Model {
-    counter: u8,
-    exit: bool,
-}
-
-impl Model {
-    fn exit(&mut self) {
-        self.exit = true;
-    }
-
-    fn increment_counter(&mut self) {
-        self.counter += 1;
-    }
-
-    fn decrement_counter(&mut self) {
-        self.counter -= 1;
-    }
-}
-
 fn update(app: &mut Model) -> io::Result<()> {
     match event::read()? {
         Event::Key(key_event) if key_event.kind == KeyEventKind::Press => match key_event.code {
-            KeyCode::Char('q') => app.exit(),
-            KeyCode::Left => app.decrement_counter(),
-            KeyCode::Right => app.increment_counter(),
+            KeyCode::Char('q') => app.should_exit = true,
             _ => {}
         },
         _ => {}
@@ -58,27 +50,45 @@ fn update(app: &mut Model) -> io::Result<()> {
     Ok(())
 }
 
-fn view(app: &Model, frame: &mut Frame) {
-    let title = Line::from(" Counter App Tutorial ".bold());
-    let instructions = Line::from(vec![
-        " Decrement ".into(),
-        "<Left>".blue().bold(),
-        " Increment ".into(),
-        "<Right>".blue().bold(),
-        " Quit ".into(),
-        "<Q> ".blue().bold(),
-    ]);
-    let block = Block::bordered()
-        .title(title.centered())
-        .title_bottom(instructions.centered())
-        .border_set(border::THICK);
+fn view(model: &Model, frame: &mut Frame) {
+    let [schedule_rect, tasks_rect] =
+        Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
+            .areas(frame.area());
 
-    let counter_text = Text::from(vec![Line::from(vec![
-        "Value: ".into(),
-        app.counter.to_string().yellow(),
-    ])]);
+    let entry = model.journal.0.iter().next().unwrap().1;
+    let events = &entry.events;
+    let tasks = &entry.tasks;
 
-    let widget = Paragraph::new(counter_text).centered().block(block);
+    let schedule_title = Line::from(" Schedule ".red());
+    let schedule_block = Block::bordered()
+        .title(schedule_title.centered())
+        .border_set(border::ROUNDED);
+    let schedule_items = events
+        .iter()
+        .map(|x| ListItem::new(format!("▸ {}", &x.title)));
+    let schedule_widget = List::from_iter(schedule_items).block(schedule_block);
 
-    frame.render_widget(widget, frame.area());
+    let task_title = Line::from(" Tasks ".yellow());
+    let task_block = Block::bordered()
+        .title(task_title.centered())
+        .border_set(border::ROUNDED);
+    let task_items = tasks.iter().map(|x| ListItem::new(format_tasks(x)));
+    let task_widget = List::from_iter(task_items).block(task_block);
+
+    frame.render_widget(schedule_widget, schedule_rect);
+    frame.render_widget(task_widget, tasks_rect);
+}
+
+fn format_tasks(task: &Task) -> String {
+    match task.completion_level {
+        CompletionLevel::None => {
+            format!("○ {}", &task.title)
+        }
+        CompletionLevel::Partial => {
+            format!("◐ {}", &task.title)
+        }
+        CompletionLevel::Full => {
+            format!("● {}", &task.title)
+        }
+    }
 }
