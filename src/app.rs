@@ -1,9 +1,12 @@
+use ratatui::widgets::ListState;
 use std::collections::HashMap;
 use time::{Date, OffsetDateTime};
 
 #[derive(Default)]
 pub struct Model {
     pub journal: Journal,
+    pub left_state: ListState,
+    pub right_state: ListState,
     pub should_exit: bool,
 }
 
@@ -11,7 +14,43 @@ impl Model {
     pub fn new() -> Self {
         Self {
             journal: Journal::new(),
+            left_state: ListState::default().with_selected(Some(0)),
+            right_state: ListState::default(),
             should_exit: false,
+        }
+    }
+
+    pub fn exit(&mut self) {
+        self.should_exit = true;
+    }
+
+    pub fn up(&mut self) {
+        if self.left_state.selected().is_some() {
+            self.left_state.select_previous()
+        } else {
+            self.right_state.select_previous()
+        }
+    }
+
+    pub fn down(&mut self) {
+        if self.left_state.selected().is_some() {
+            self.left_state.select_next()
+        } else {
+            self.right_state.select_next()
+        }
+    }
+
+    pub fn left(&mut self) {
+        if self.right_state.selected().is_some() {
+            self.left_state.select(self.right_state.selected());
+            self.right_state.select(None);
+        }
+    }
+
+    pub fn right(&mut self) {
+        if self.left_state.selected().is_some() {
+            self.right_state.select(self.left_state.selected());
+            self.left_state.select(None);
         }
     }
 }
