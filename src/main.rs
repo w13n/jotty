@@ -1,7 +1,7 @@
 use std::io;
 
 use crate::app::{CompletionLevel, Entry, Importance, Model, Task};
-use crossterm::event::{self, Event, KeyCode, KeyEventKind};
+use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use ratatui::prelude::Color;
 use ratatui::widgets::ListItem;
 use ratatui::{
@@ -11,7 +11,7 @@ use ratatui::{
     style::Stylize,
     symbols::border,
     text::Line,
-    widgets::{Block, List},
+    widgets::{Block, List, Paragraph},
 };
 use time::{Date, Month};
 
@@ -32,7 +32,7 @@ fn main() -> io::Result<()> {
     entry.push_task(Task::new("call nami", CompletionLevel::Partial));
     entry.push_task(Task::new("play stardew", CompletionLevel::Full));
 
-    model.journal.insert(date, entry);
+    model.journal.insert_with(date, entry);
 
     while !model.should_exit {
         terminal.draw(|frame| view(&mut model, frame))?;
@@ -48,9 +48,23 @@ fn update(app: &mut Model) -> io::Result<()> {
             KeyCode::Char('q') => app.exit(),
             KeyCode::Up => app.up(),
             KeyCode::Down => app.down(),
-            KeyCode::Right => app.right(),
-            KeyCode::Left => app.left(),
+            KeyCode::Left => {
+                if key_event.modifiers.contains(KeyModifiers::SHIFT) {
+                    app.prev_day()
+                } else {
+                    app.left()
+                }
+            }
+            KeyCode::Right => {
+                if key_event.modifiers.contains(KeyModifiers::SHIFT) {
+                    app.next_day()
+                } else {
+                    app.right()
+                }
+            }
             KeyCode::Char(' ') => app.cycle_task(),
+            KeyCode::Char('n') => app.new_entry(),
+            KeyCode::Char('t') => app.today(),
             _ => {}
         },
         _ => {}
@@ -65,10 +79,6 @@ fn view(model: &mut Model, frame: &mut Frame) {
     let [events_rect, tasks_rect] =
         Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)]).areas(middle);
 
-    let entry = model.journal.0.get(&model.date).unwrap();
-    let events = &entry.events;
-    let tasks = &entry.tasks;
-
     let title = Line::from(vec![
         "Jotty".green().bold(),
         " entry on ".bold(),
@@ -76,31 +86,41 @@ fn view(model: &mut Model, frame: &mut Frame) {
     ]);
     let instructions =
         Line::from("<q> to quit; <←↑↓→> to navigate; <SPACE> to cycle; <ENTER> to type".gray());
-    let top_text = Block::new()
+    let container_block = Block::new()
         .title(title.centered())
         .title_bottom(instructions.centered());
 
-    let events_title = Line::from(" Events ".red().bold());
-    let events_block = Block::bordered()
-        .title(events_title.centered())
-        .border_set(border::ROUNDED);
-    let events_items = events.iter().map(|x| ListItem::new(x.title.to_string()));
-    let events_widget = List::from_iter(events_items)
-        .block(events_block)
-        .highlight_style(Style::new().fg(Color::Red));
+    let container = Paragraph::new("no entry for this date")
+        .centered()
+        .block(container_block);
 
-    let task_title = Line::from(" Tasks ".yellow().bold());
-    let task_block = Block::bordered()
-        .title(task_title.centered())
-        .border_set(border::ROUNDED);
-    let task_items = tasks.iter().map(|x| ListItem::new(format_tasks(x)));
-    let task_widget = List::from_iter(task_items)
-        .block(task_block)
-        .highlight_style(Style::new().fg(Color::Yellow));
+    frame.render_widget(container, frame.area());
 
-    frame.render_widget(top_text, frame.area());
-    frame.render_stateful_widget(events_widget, events_rect, &mut model.events_state);
-    frame.render_stateful_widget(task_widget, tasks_rect, &mut model.task_state);
+    if let Some(entry) = model.journal.0.get(&model.date) {
+        let events = &entry.events;
+        let tasks = &entry.tasks;
+
+        let events_title = Line::from(" Events ".red().bold());
+        let events_block = Block::bordered()
+            .title(events_title.centered())
+            .border_set(border::ROUNDED);
+        let events_items = events.iter().map(|x| ListItem::new(x.title.to_string()));
+        let events_widget = List::from_iter(events_items)
+            .block(events_block)
+            .highlight_style(Style::new().fg(Color::Red));
+
+        let task_title = Line::from(" Tasks ".yellow().bold());
+        let task_block = Block::bordered()
+            .title(task_title.centered())
+            .border_set(border::ROUNDED);
+        let task_items = tasks.iter().map(|x| ListItem::new(format_tasks(x)));
+        let task_widget = List::from_iter(task_items)
+            .block(task_block)
+            .highlight_style(Style::new().fg(Color::Yellow));
+
+        frame.render_stateful_widget(events_widget, events_rect, &mut model.events_state);
+        frame.render_stateful_widget(task_widget, tasks_rect, &mut model.task_state);
+    }
 }
 
 fn format_tasks(task: &Task) -> String {

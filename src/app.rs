@@ -63,6 +63,29 @@ impl Model {
                 .expect("values extracted from app state so they cannot be invalid")
         }
     }
+
+    pub fn next_day(&mut self) {
+        self.date = self.date.next_day().expect("we will never reach max date")
+    }
+
+    pub fn prev_day(&mut self) {
+        self.date = self
+            .date
+            .previous_day()
+            .expect("we will never reach minimum date")
+    }
+
+    pub fn today(&mut self) {
+        self.date = OffsetDateTime::now_local()
+            .unwrap_or(OffsetDateTime::now_utc())
+            .date();
+    }
+
+    pub fn new_entry(&mut self) {
+        if !self.journal.contains(&self.date) {
+            self.journal.insert_with(self.date, Entry::new());
+        }
+    }
 }
 
 #[derive(Default)]
@@ -73,14 +96,7 @@ impl Journal {
         Self(HashMap::new())
     }
 
-    pub fn insert_today(&mut self, entry: Entry) {
-        let today = OffsetDateTime::now_local()
-            .unwrap_or(OffsetDateTime::now_utc())
-            .date();
-        self.0.insert(today, entry);
-    }
-
-    pub fn insert(&mut self, date: Date, entry: Entry) -> bool {
+    pub fn insert_with(&mut self, date: Date, entry: Entry) -> bool {
         self.0.insert(date, entry).is_some()
     }
 
