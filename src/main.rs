@@ -13,12 +13,14 @@ use ratatui::{
     text::Line,
     widgets::{Block, List},
 };
+use time::{Date, Month};
 
 mod app;
 
 fn main() -> io::Result<()> {
     let mut terminal = ratatui::init();
-    let mut model = Model::new();
+    let date = Date::from_calendar_date(2025, Month::August, 15).unwrap();
+    let mut model = Model::new(date);
 
     let mut entry = Entry::new();
     entry.push_event(app::Event::new("NAMI HERE", Importance::Extreme));
@@ -30,7 +32,7 @@ fn main() -> io::Result<()> {
     entry.push_task(Task::new("call nami", CompletionLevel::Partial));
     entry.push_task(Task::new("play stardew", CompletionLevel::Full));
 
-    model.journal.insert_today(entry);
+    model.journal.insert(date, entry);
 
     while !model.should_exit {
         terminal.draw(|frame| view(&mut model, frame))?;
@@ -48,6 +50,7 @@ fn update(app: &mut Model) -> io::Result<()> {
             KeyCode::Down => app.down(),
             KeyCode::Right => app.right(),
             KeyCode::Left => app.left(),
+            KeyCode::Char(' ') => app.cycle_task(),
             _ => {}
         },
         _ => {}
@@ -59,17 +62,17 @@ fn view(model: &mut Model, frame: &mut Frame) {
     let [_top, middle, _bottom] =
         Layout::vertical([Constraint::Max(1), Constraint::Min(1), Constraint::Max(1)])
             .areas(frame.area());
-    let [schedule_rect, tasks_rect] =
+    let [events_rect, tasks_rect] =
         Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)]).areas(middle);
 
-    let (date, entry) = model.journal.0.iter().next().unwrap();
+    let entry = model.journal.0.get(&model.date).unwrap();
     let events = &entry.events;
     let tasks = &entry.tasks;
 
     let title = Line::from(vec![
         "Jotty".green().bold(),
         " entry on ".bold(),
-        date.to_string().blue().bold(),
+        model.date.to_string().blue().bold(),
     ]);
     let instructions =
         Line::from("<q> to quit; <←↑↓→> to navigate; <SPACE> to cycle; <ENTER> to type".gray());
@@ -77,13 +80,13 @@ fn view(model: &mut Model, frame: &mut Frame) {
         .title(title.centered())
         .title_bottom(instructions.centered());
 
-    let schedule_title = Line::from(" Schedule ".red().bold());
-    let schedule_block = Block::bordered()
-        .title(schedule_title.centered())
+    let events_title = Line::from(" Events ".red().bold());
+    let events_block = Block::bordered()
+        .title(events_title.centered())
         .border_set(border::ROUNDED);
-    let schedule_items = events.iter().map(|x| ListItem::new(x.title.to_string()));
-    let schedule_widget = List::from_iter(schedule_items)
-        .block(schedule_block)
+    let events_items = events.iter().map(|x| ListItem::new(x.title.to_string()));
+    let events_widget = List::from_iter(events_items)
+        .block(events_block)
         .highlight_style(Style::new().fg(Color::Red));
 
     let task_title = Line::from(" Tasks ".yellow().bold());
@@ -96,8 +99,8 @@ fn view(model: &mut Model, frame: &mut Frame) {
         .highlight_style(Style::new().fg(Color::Yellow));
 
     frame.render_widget(top_text, frame.area());
-    frame.render_stateful_widget(schedule_widget, schedule_rect, &mut model.left_state);
-    frame.render_stateful_widget(task_widget, tasks_rect, &mut model.right_state);
+    frame.render_stateful_widget(events_widget, events_rect, &mut model.events_state);
+    frame.render_stateful_widget(task_widget, tasks_rect, &mut model.task_state);
 }
 
 fn format_tasks(task: &Task) -> String {
