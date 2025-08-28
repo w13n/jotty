@@ -2,6 +2,7 @@ use std::io;
 
 use crate::app::{CompletionLevel, Entry, Importance, Model, Task};
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
+use ratatui::layout::Position;
 use ratatui::prelude::Color;
 use ratatui::widgets::ListItem;
 use ratatui::{
@@ -45,26 +46,49 @@ fn main() -> io::Result<()> {
 fn update(app: &mut Model) -> io::Result<()> {
     match event::read()? {
         Event::Key(key_event) if key_event.kind == KeyEventKind::Press => match key_event.code {
-            KeyCode::Char('q') => app.exit(),
-            KeyCode::Up => app.up(),
-            KeyCode::Down => app.down(),
+            KeyCode::Up => app.move_up(),
+            KeyCode::Down => app.move_down(),
             KeyCode::Left => {
                 if key_event.modifiers.contains(KeyModifiers::SHIFT) {
-                    app.prev_day()
+                    app.move_to_prev()
+                } else if app.editing().is_some() {
+                    app.move_cursor_left()
                 } else {
-                    app.left()
+                    app.move_left()
                 }
             }
             KeyCode::Right => {
                 if key_event.modifiers.contains(KeyModifiers::SHIFT) {
-                    app.next_day()
+                    app.move_to_next()
+                } else if app.editing().is_some() {
+                    app.move_cursor_right()
                 } else {
-                    app.right()
+                    app.move_right()
                 }
             }
-            KeyCode::Char(' ') => app.cycle_task(),
-            KeyCode::Char('n') => app.new_entry(),
-            KeyCode::Char('t') => app.today(),
+            KeyCode::Backspace => app.delete_char(),
+            KeyCode::Enter => {
+                if app.editing().is_some() {
+                    app.exit_editing_mode()
+                } else {
+                    app.enter_editing_mode()
+                }
+            }
+            KeyCode::Esc => app.exit_editing_mode(),
+            KeyCode::Char(c) => {
+                if app.editing().is_some() {
+                    app.insert_char(c)
+                } else {
+                    match c {
+                        'q' => app.exit(),
+                        ' ' => app.cycle_task(),
+                        'n' => app.create_new_entry(),
+                        't' => app.move_to_today(),
+                        'e' => app.enter_editing_mode(),
+                        _ => {}
+                    }
+                }
+            }
             _ => {}
         },
         _ => {}
@@ -120,6 +144,26 @@ fn view(model: &mut Model, frame: &mut Frame) {
 
         frame.render_stateful_widget(events_widget, events_rect, &mut model.events_state);
         frame.render_stateful_widget(task_widget, tasks_rect, &mut model.task_state);
+        if let Some(offset) = model.editing() {
+            let is_events_side = model.events_state.selected().is_some();
+            let selected = if is_events_side {
+                model.events_state.selected().unwrap()
+            } else {
+                model.task_state.selected().unwrap()
+            };
+            let position = if is_events_side {
+                Position::new(
+                    events_rect.x + 1 + offset,
+                    events_rect.y + 1 + selected as u16,
+                )
+            } else {
+                Position::new(
+                    tasks_rect.x + 4 + offset,
+                    tasks_rect.y + 1 + selected as u16,
+                )
+            };
+            frame.set_cursor_position(position);
+        }
     }
 }
 
