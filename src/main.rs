@@ -1,6 +1,7 @@
 use std::io;
 
-use crate::app::{CompletionLevel, Entry, Importance, Model, Task};
+use crate::app::Model;
+use crate::journal::{CompletionLevel, Task};
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use ratatui::layout::Position;
 use ratatui::prelude::Color;
@@ -17,25 +18,14 @@ use ratatui::{
 use time::{Date, Month};
 
 mod app;
+mod journal;
 
 fn main() -> io::Result<()> {
     let mut terminal = ratatui::init();
     let date = Date::from_calendar_date(2025, Month::August, 15).unwrap();
     let mut model = Model::new(date);
 
-    let mut entry = Entry::new();
-    entry.push_event(app::Event::new("NAMI HERE", Importance::Extreme));
-    entry.push_event(app::Event::new("birthday!!", Importance::High));
-    entry.push_event(app::Event::new("Work", Importance::Normal));
-    entry.push_event(app::Event::new("cook dinner", Importance::Low));
-
-    entry.push_task(Task::new("code stuff today", CompletionLevel::None));
-    entry.push_task(Task::new("call nami", CompletionLevel::Partial));
-    entry.push_task(Task::new("play stardew", CompletionLevel::Full));
-
-    model.journal.insert_with(date, entry);
-
-    while !model.should_exit {
+    while !model.should_exit() {
         terminal.draw(|frame| view(&mut model, frame))?;
         update(&mut model)?;
     }
@@ -106,7 +96,7 @@ fn view(model: &mut Model, frame: &mut Frame) {
     let title = Line::from(vec![
         "Jotty".green().bold(),
         " entry on ".bold(),
-        model.date.to_string().blue().bold(),
+        model.date().to_string().blue().bold(),
     ]);
     let instructions =
         Line::from("<q> to quit; <←↑↓→> to navigate; <SPACE> to cycle; <ENTER> to type".gray());
@@ -120,15 +110,15 @@ fn view(model: &mut Model, frame: &mut Frame) {
 
     frame.render_widget(container, frame.area());
 
-    if let Some(entry) = model.journal.0.get(&model.date) {
-        let events = &entry.events;
-        let tasks = &entry.tasks;
-
+    if model.has_entry() {
         let events_title = Line::from(" Events ".red().bold());
         let events_block = Block::bordered()
             .title(events_title.centered())
             .border_set(border::ROUNDED);
-        let events_items = events.iter().map(|x| ListItem::new(x.title.to_string()));
+        let events_items = model
+            .events_iter()
+            .expect("checked that model has entry")
+            .map(|x| ListItem::new(x.title.to_string()));
         let events_widget = List::from_iter(events_items)
             .block(events_block)
             .highlight_style(Style::new().fg(Color::Red));
@@ -137,7 +127,10 @@ fn view(model: &mut Model, frame: &mut Frame) {
         let task_block = Block::bordered()
             .title(task_title.centered())
             .border_set(border::ROUNDED);
-        let task_items = tasks.iter().map(|x| ListItem::new(format_tasks(x)));
+        let task_items = model
+            .tasks_iter()
+            .expect("checked that model has entry")
+            .map(|x| ListItem::new(format_tasks(x)));
         let task_widget = List::from_iter(task_items)
             .block(task_block)
             .highlight_style(Style::new().fg(Color::Yellow));

@@ -1,15 +1,14 @@
-use anyhow::{Result, anyhow};
+use crate::journal::{Event, Journal, Task};
 use ratatui::widgets::ListState;
-use std::collections::HashMap;
 use time::{Date, OffsetDateTime};
 
 pub struct Model {
-    pub journal: Journal,
-    pub date: Date,
+    journal: Journal,
+    date: Date,
     editing: Option<u16>,
     pub events_state: ListState,
     pub task_state: ListState,
-    pub should_exit: bool,
+    should_exit: bool,
 }
 
 impl Model {
@@ -64,10 +63,21 @@ impl Model {
 
     pub fn cycle_task(&mut self) {
         self.editing = None;
-        if let Some(pos) = self.task_state.selected() {
+        if let Some(idx) = self.task_state.selected() {
             self.journal
-                .cycle_task(&self.date, pos)
-                .expect("values extracted from app state so they cannot be invalid")
+                .get_task_mut(&self.date, idx)
+                .expect("selected cannot be out of range")
+                .cycle();
+        }
+    }
+
+    pub fn cycle_event(&mut self) {
+        self.editing = None;
+        if let Some(idx) = self.events_state.selected() {
+            self.journal
+                .get_event_mut(&self.date, idx)
+                .expect("selected cannot be out of range")
+                .cycle();
         }
     }
 
@@ -93,8 +103,8 @@ impl Model {
 
     pub fn create_new_entry(&mut self) {
         self.editing = None;
-        if !self.journal.contains(&self.date) {
-            self.journal.insert_with(self.date, Entry::new());
+        if !self.journal.contains_day(&self.date) {
+            self.journal.new_entry(self.date);
         }
     }
 
@@ -136,130 +146,50 @@ impl Model {
         }
     }
 
+    pub fn should_exit(&self) -> bool {
+        self.should_exit
+    }
+
     pub fn editing(&self) -> Option<u16> {
         self.editing
+    }
+
+    pub fn date(&self) -> &Date {
+        &self.date
+    }
+
+    pub fn has_entry(&self) -> bool {
+        self.journal.contains_day(&self.date)
+    }
+
+    pub fn tasks_iter(&self) -> Option<std::slice::Iter<'_, Task>> {
+        self.journal.tasks_iter(&self.date)
+    }
+
+    pub fn events_iter(&self) -> Option<std::slice::Iter<'_, Event>> {
+        self.journal.events_iter(&self.date)
     }
 
     fn get_editing_string(&mut self) -> Option<&mut String> {
         if self.editing.is_some() {
             if let Some(row_idx) = self.events_state.selected() {
                 return Some(
-                    &mut self.journal.0.get_mut(&self.date).unwrap().events[row_idx].title,
+                    &mut self
+                        .journal
+                        .get_event_mut(&self.date, row_idx)
+                        .expect("selected cannot be out of range")
+                        .title,
                 );
             } else if let Some(row_idx) = self.task_state.selected() {
-                return Some(&mut self.journal.0.get_mut(&self.date).unwrap().tasks[row_idx].title);
+                return Some(
+                    &mut self
+                        .journal
+                        .get_task_mut(&self.date, row_idx)
+                        .expect("selected cannot be out of range")
+                        .title,
+                );
             }
         }
         None
-    }
-}
-
-#[derive(Default)]
-pub struct Journal(pub HashMap<Date, Entry>);
-
-impl Journal {
-    pub fn new() -> Self {
-        Self(HashMap::new())
-    }
-
-    pub fn insert_with(&mut self, date: Date, entry: Entry) -> bool {
-        self.0.insert(date, entry).is_some()
-    }
-
-    pub fn contains(&self, date: &Date) -> bool {
-        self.0.contains_key(date)
-    }
-
-    pub fn cycle_task(&mut self, date: &Date, index: usize) -> Result<()> {
-        self.0
-            .get_mut(date)
-            .ok_or(anyhow!("date does not exist in Journal for cycling"))?
-            .cycle_task(index)?;
-        Ok(())
-    }
-}
-
-pub struct Entry {
-    pub events: Vec<Event>,
-    pub tasks: Vec<Task>,
-}
-
-impl Entry {
-    pub fn new() -> Self {
-        Self {
-            events: Vec::new(),
-            tasks: Vec::new(),
-        }
-    }
-
-    pub fn push_event(&mut self, event: Event) {
-        self.events.push(event);
-    }
-
-    pub fn push_task(&mut self, task: Task) {
-        self.tasks.push(task);
-    }
-
-    pub fn cycle_task(&mut self, index: usize) -> Result<()> {
-        self.tasks
-            .get_mut(index)
-            .ok_or(anyhow!("Task does not exist"))?
-            .cycle();
-        Ok(())
-    }
-}
-
-pub struct Event {
-    pub title: String,
-    pub importance: Importance,
-}
-
-impl Event {
-    pub fn new(title: &str, importance: Importance) -> Self {
-        Self {
-            title: title.to_string(),
-            importance,
-        }
-    }
-}
-
-pub enum Importance {
-    Low,
-    Normal,
-    High,
-    Extreme,
-}
-
-pub struct Task {
-    pub title: String,
-    pub completion_level: CompletionLevel,
-}
-
-impl Task {
-    pub fn new(title: &str, completion_level: CompletionLevel) -> Self {
-        Self {
-            title: title.to_string(),
-            completion_level,
-        }
-    }
-
-    pub fn cycle(&mut self) {
-        self.completion_level = self.completion_level.cycle()
-    }
-}
-
-pub enum CompletionLevel {
-    None,
-    Partial,
-    Full,
-}
-
-impl CompletionLevel {
-    pub fn cycle(&self) -> Self {
-        match self {
-            CompletionLevel::None => CompletionLevel::Partial,
-            CompletionLevel::Partial => CompletionLevel::Full,
-            CompletionLevel::Full => CompletionLevel::None,
-        }
     }
 }
