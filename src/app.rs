@@ -5,7 +5,7 @@ use time::{Date, OffsetDateTime};
 pub struct Model {
     journal: Journal,
     date: Date,
-    editing: Option<u16>,
+    editing: Option<usize>,
     pub events_state: ListState,
     pub task_state: ListState,
     should_exit: bool,
@@ -141,7 +141,7 @@ impl Model {
 
     pub fn enter_editing_mode(&mut self) {
         if let Some(editing_str) = self.get_editing_string() {
-            self.editing = Some(editing_str.len() as u16)
+            self.editing = Some(editing_str.len());
         }
     }
 
@@ -154,7 +154,7 @@ impl Model {
     }
 
     pub fn move_cursor_right(&mut self) {
-        if let Some(len) = self.get_editing_string().map(|x| x.len() as u16) {
+        if let Some(len) = self.get_editing_string().map(|x| x.len()) {
             self.editing = self.editing.map(|x| if x < len { x + 1 } else { x });
         }
     }
@@ -162,7 +162,7 @@ impl Model {
     pub fn insert_char(&mut self, c: char) {
         if let Some(idx) = self.editing() {
             let str = self.get_editing_string().expect("editing has some");
-            str.insert(idx as usize, c);
+            str.insert(idx, c);
             self.editing = self.editing.map(|x| x + 1);
         }
     }
@@ -171,7 +171,7 @@ impl Model {
         if let Some(editing) = self.editing {
             if let Some(x) = self.get_editing_string() {
                 if editing > 0 {
-                    x.remove(editing as usize - 1);
+                    x.remove(editing - 1);
                     self.editing = self.editing.map(|x| x - 1);
                 }
             }
@@ -265,7 +265,7 @@ impl Model {
         self.should_exit
     }
 
-    pub fn editing(&self) -> Option<u16> {
+    pub fn editing(&self) -> Option<usize> {
         self.editing
     }
 

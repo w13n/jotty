@@ -154,12 +154,12 @@ fn view(model: &mut Model, frame: &mut Frame) {
             };
             let position = if is_events_side {
                 Position::new(
-                    events_rect.x + 1 + offset,
+                    events_rect.x + 1 + offset as u16,
                     events_rect.y + 1 + selected as u16,
                 )
             } else {
                 Position::new(
-                    tasks_rect.x + 4 + offset,
+                    tasks_rect.x + 4 + offset as u16,
                     tasks_rect.y + 1 + selected as u16,
                 )
             };
