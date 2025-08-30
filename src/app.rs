@@ -89,23 +89,47 @@ impl Model {
     }
 
     pub fn move_to_next(&mut self) {
-        self.editing = None;
-        self.date = self.date.next_day().expect("we will never reach max date")
+        self.move_to(self.date.next_day().expect("we will never reach max date"));
     }
 
     pub fn move_to_prev(&mut self) {
-        self.editing = None;
-        self.date = self
-            .date
-            .previous_day()
-            .expect("we will never reach minimum date")
+        self.move_to(
+            self.date
+                .previous_day()
+                .expect("we will never reach minimum date"),
+        );
     }
 
     pub fn move_to_today(&mut self) {
+        self.move_to(
+            OffsetDateTime::now_local()
+                .unwrap_or(OffsetDateTime::now_utc())
+                .date(),
+        );
+    }
+
+    fn move_to(&mut self, date: Date) {
         self.editing = None;
-        self.date = OffsetDateTime::now_local()
-            .unwrap_or(OffsetDateTime::now_utc())
-            .date();
+        self.date = date;
+        if self.task_state.selected().is_some() && self.journal.tasks_len(&date).unwrap_or(0) == 0 {
+            if self.journal.events_len(&date).unwrap_or(0) > 0 {
+                self.events_state.select(self.task_state.selected());
+            }
+            self.task_state.select(None);
+        } else if self.events_state.selected().is_some()
+            && self.journal.events_len(&date).unwrap_or(0) == 0
+        {
+            if self.journal.tasks_len(&date).unwrap_or(0) > 0 {
+                self.task_state.select(self.events_state.selected());
+            }
+            self.events_state.select(None);
+        } else if self.task_state.selected().is_none() && self.task_state.selected().is_none() {
+            if self.journal.events_len(&date).unwrap_or(0) > 0 {
+                self.events_state.select(Some(0));
+            } else if self.journal.tasks_len(&date).unwrap_or(0) > 0 {
+                self.task_state.select(Some(0));
+            }
+        }
     }
 
     pub fn create_new_entry(&mut self) {
