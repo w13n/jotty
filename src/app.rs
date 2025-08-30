@@ -17,7 +17,7 @@ impl Model {
             journal: Journal::new(),
             date,
             editing: None,
-            events_state: ListState::default().with_selected(Some(0)),
+            events_state: ListState::default(),
             task_state: ListState::default(),
             should_exit: false,
         }
@@ -61,19 +61,14 @@ impl Model {
         }
     }
 
-    pub fn cycle_task(&mut self) {
+    pub fn cycle(&mut self) {
         self.editing = None;
         if let Some(idx) = self.task_state.selected() {
             self.journal
                 .get_task_mut(&self.date, idx)
                 .expect("selected cannot be out of range")
                 .cycle();
-        }
-    }
-
-    pub fn cycle_event(&mut self) {
-        self.editing = None;
-        if let Some(idx) = self.events_state.selected() {
+        } else if let Some(idx) = self.events_state.selected() {
             self.journal
                 .get_event_mut(&self.date, idx)
                 .expect("selected cannot be out of range")
@@ -109,8 +104,9 @@ impl Model {
     }
 
     pub fn enter_editing_mode(&mut self) {
-        self.editing = Some(0);
-        self.editing = Some(self.get_editing_string().unwrap().len() as u16);
+        if let Some(editing_str) = self.get_editing_string() {
+            self.editing = Some(editing_str.len() as u16)
+        }
     }
 
     pub fn exit_editing_mode(&mut self) {
@@ -171,24 +167,22 @@ impl Model {
     }
 
     fn get_editing_string(&mut self) -> Option<&mut String> {
-        if self.editing.is_some() {
-            if let Some(row_idx) = self.events_state.selected() {
-                return Some(
-                    &mut self
-                        .journal
-                        .get_event_mut(&self.date, row_idx)
-                        .expect("selected cannot be out of range")
-                        .title,
-                );
-            } else if let Some(row_idx) = self.task_state.selected() {
-                return Some(
-                    &mut self
-                        .journal
-                        .get_task_mut(&self.date, row_idx)
-                        .expect("selected cannot be out of range")
-                        .title,
-                );
-            }
+        if let Some(row_idx) = self.events_state.selected() {
+            return Some(
+                &mut self
+                    .journal
+                    .get_event_mut(&self.date, row_idx)
+                    .expect("selected cannot be out of range")
+                    .title,
+            );
+        } else if let Some(row_idx) = self.task_state.selected() {
+            return Some(
+                &mut self
+                    .journal
+                    .get_task_mut(&self.date, row_idx)
+                    .expect("selected cannot be out of range")
+                    .title,
+            );
         }
         None
     }

@@ -71,7 +71,7 @@ fn update(app: &mut Model) -> io::Result<()> {
                 } else {
                     match c {
                         'q' => app.exit(),
-                        ' ' => app.cycle_task(),
+                        ' ' => app.cycle(),
                         'n' => app.create_new_entry(),
                         't' => app.move_to_today(),
                         'e' => app.enter_editing_mode(),
