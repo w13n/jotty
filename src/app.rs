@@ -124,11 +124,10 @@ impl Model {
     }
 
     pub fn insert_char(&mut self, c: char) {
-        let editing = self.editing.unwrap() as usize;
-        if let Some(x) = self.get_editing_string() {
-            x.insert(editing, c);
+        if let Some(idx) = self.editing() {
+            let str = self.get_editing_string().expect("editing has some");
+            str.insert(idx as usize, c)
         }
-        self.editing = self.editing.map(|x| x + 1);
     }
 
     pub fn delete_char(&mut self) {
