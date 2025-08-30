@@ -21,7 +21,7 @@ impl Journal {
             .ok_or(anyhow!("date does not exist in journal"))?
             .tasks;
 
-        if tasks.len() >= index {
+        if tasks.len() < index {
             return Err(anyhow!("index out of bounds"));
         }
 
@@ -36,7 +36,7 @@ impl Journal {
             .ok_or(anyhow!("date does not exist in journal"))?
             .events;
 
-        if events.len() >= index {
+        if events.len() < index {
             return Err(anyhow!("index out of bounds"));
         }
 

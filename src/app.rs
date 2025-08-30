@@ -154,6 +154,46 @@ impl Model {
         }
     }
 
+    pub fn append_new_event(&mut self) {
+        if self.has_entry() {
+            let idx = self.journal.events_len(&self.date).expect("self has entry");
+            self.journal
+                .new_event(&self.date, idx)
+                .expect("idx was set based on length");
+            self.events_state.selected_mut().replace(idx);
+            self.task_state.selected_mut().take();
+            self.editing = Some(0);
+        }
+    }
+
+    pub fn append_new_task(&mut self) {
+        if self.has_entry() {
+            let idx = self.journal.tasks_len(&self.date).expect("self has entry");
+            self.journal
+                .new_task(&self.date, idx)
+                .expect("idx was set based on length");
+            self.task_state.selected_mut().replace(idx);
+            self.events_state.selected_mut().take();
+            self.editing = Some(0);
+        }
+    }
+
+    pub fn insert_new_item(&mut self) {
+        if self.has_entry() {
+            if let Some(idx) = self.events_state.selected() {
+                self.journal
+                    .new_event(&self.date, idx)
+                    .expect("idx was set based on selected");
+                self.editing = Some(0);
+            } else if let Some(idx) = self.task_state.selected() {
+                self.journal
+                    .new_task(&self.date, idx)
+                    .expect("idx was set based on selected");
+                self.editing = Some(0);
+            }
+        }
+    }
+
     pub fn should_exit(&self) -> bool {
         self.should_exit
     }

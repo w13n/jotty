@@ -72,9 +72,16 @@ fn update(app: &mut Model) -> io::Result<()> {
                     match c {
                         'q' => app.exit(),
                         ' ' => app.cycle(),
-                        'n' => app.create_new_entry(),
-                        't' => app.move_to_today(),
-                        'e' => app.enter_editing_mode(),
+                        'c' => app.move_to_today(),
+                        'n' => {
+                            if app.has_entry() {
+                                app.insert_new_item()
+                            } else {
+                                app.create_new_entry()
+                            }
+                        }
+                        'e' => app.append_new_event(),
+                        't' => app.append_new_task(),
                         _ => {}
                     }
                 }
