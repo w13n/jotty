@@ -14,6 +14,21 @@ impl Journal {
         self.0.insert(date, Entry::new()).is_some()
     }
 
+    pub fn new_event(&mut self, date: &Date, index: usize) -> Result<()> {
+        let events = &mut self
+            .0
+            .get_mut(date)
+            .ok_or(anyhow!("date does not exist in journal"))?
+            .events;
+
+        if events.len() < index {
+            return Err(anyhow!("index out of bounds"));
+        }
+
+        events.insert(index, Event::new());
+        Ok(())
+    }
+
     pub fn new_task(&mut self, date: &Date, index: usize) -> Result<()> {
         let tasks = &mut self
             .0
@@ -29,19 +44,42 @@ impl Journal {
         Ok(())
     }
 
-    pub fn new_event(&mut self, date: &Date, index: usize) -> Result<()> {
+    pub fn delete_event(&mut self, date: &Date, index: usize) -> Result<()> {
         let events = &mut self
             .0
             .get_mut(date)
             .ok_or(anyhow!("date does not exist in journal"))?
             .events;
 
-        if events.len() < index {
+        if events.len() <= index {
             return Err(anyhow!("index out of bounds"));
         }
 
-        events.insert(index, Event::new());
+        events.remove(index);
         Ok(())
+    }
+
+    pub fn delete_task(&mut self, date: &Date, index: usize) -> Result<()> {
+        let tasks = &mut self
+            .0
+            .get_mut(date)
+            .ok_or(anyhow!("date does not exist in journal"))?
+            .tasks;
+
+        if tasks.len() <= index {
+            return Err(anyhow!("index out of bounds"));
+        }
+
+        tasks.remove(index);
+        Ok(())
+    }
+
+    pub fn delete_entry(&mut self, date: &Date) -> Result<()> {
+        if self.contains_day(date) {
+            self.0.remove(date);
+            return Ok(());
+        }
+        Err(anyhow!("entry does not exist"))
     }
 
     pub fn contains_day(&self, date: &Date) -> bool {

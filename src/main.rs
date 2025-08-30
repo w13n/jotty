@@ -82,6 +82,7 @@ fn update(app: &mut Model) -> io::Result<()> {
                         }
                         'e' => app.append_new_event(),
                         't' => app.append_new_task(),
+                        'd' => app.delete(),
                         _ => {}
                     }
                 }

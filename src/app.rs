@@ -194,6 +194,49 @@ impl Model {
         }
     }
 
+    pub fn delete(&mut self) {
+        self.editing = None;
+        if let Some(idx) = self.events_state.selected() {
+            self.journal
+                .delete_event(&self.date, idx)
+                .expect("the item is selected");
+            if self
+                .journal
+                .events_len(&self.date)
+                .expect("an item was selected")
+                == 0
+                && self
+                    .journal
+                    .tasks_len(&self.date)
+                    .expect("an item was selected")
+                    > 0
+            {
+                self.task_state.select(Some(idx));
+            }
+        } else if let Some(idx) = self.task_state.selected() {
+            self.journal
+                .delete_task(&self.date, idx)
+                .expect("the item is selected");
+            if self
+                .journal
+                .tasks_len(&self.date)
+                .expect("an item was selected")
+                == 0
+                && self
+                    .journal
+                    .events_len(&self.date)
+                    .expect("an item was selected")
+                    > 0
+            {
+                self.events_state.select(Some(idx));
+            }
+        } else if self.has_entry() {
+            self.journal
+                .delete_entry(&self.date)
+                .expect("we have the entry");
+        }
+    }
+
     pub fn should_exit(&self) -> bool {
         self.should_exit
     }
