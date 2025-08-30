@@ -31,7 +31,7 @@ impl Model {
         self.editing = None;
         if self.events_state.selected().is_some() {
             self.events_state.select_previous()
-        } else {
+        } else if self.task_state.selected().is_some() {
             self.task_state.select_previous()
         }
     }
@@ -40,14 +40,20 @@ impl Model {
         self.editing = None;
         if self.events_state.selected().is_some() {
             self.events_state.select_next()
-        } else {
+        } else if self.task_state.selected().is_some() {
             self.task_state.select_next()
         }
     }
 
     pub fn move_left(&mut self) {
         self.editing = None;
-        if self.task_state.selected().is_some() {
+        if self.task_state.selected().is_some()
+            && self
+                .journal
+                .events_len(&self.date)
+                .expect("task state has something selected")
+                > 0
+        {
             self.events_state.select(self.task_state.selected());
             self.task_state.select(None);
         }
@@ -55,7 +61,13 @@ impl Model {
 
     pub fn move_right(&mut self) {
         self.editing = None;
-        if self.events_state.selected().is_some() {
+        if self.events_state.selected().is_some()
+            && self
+                .journal
+                .tasks_len(&self.date)
+                .expect("event state has something selected")
+                > 0
+        {
             self.task_state.select(self.events_state.selected());
             self.events_state.select(None);
         }
@@ -126,7 +138,8 @@ impl Model {
     pub fn insert_char(&mut self, c: char) {
         if let Some(idx) = self.editing() {
             let str = self.get_editing_string().expect("editing has some");
-            str.insert(idx as usize, c)
+            str.insert(idx as usize, c);
+            self.editing = self.editing.map(|x| x + 1);
         }
     }
 
