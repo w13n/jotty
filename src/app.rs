@@ -30,18 +30,18 @@ impl Model {
     pub fn move_up(&mut self) {
         self.editing = None;
         if self.events_state.selected().is_some() {
-            self.events_state.select_previous()
+            self.events_state.select_previous();
         } else if self.task_state.selected().is_some() {
-            self.task_state.select_previous()
+            self.task_state.select_previous();
         }
     }
 
     pub fn move_down(&mut self) {
         self.editing = None;
         if self.events_state.selected().is_some() {
-            self.events_state.select_next()
+            self.events_state.select_next();
         } else if self.task_state.selected().is_some() {
-            self.task_state.select_next()
+            self.task_state.select_next();
         }
     }
 

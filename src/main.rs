@@ -40,34 +40,34 @@ fn update(app: &mut Model) -> io::Result<()> {
             KeyCode::Down => app.move_down(),
             KeyCode::Left => {
                 if key_event.modifiers.contains(KeyModifiers::SHIFT) {
-                    app.move_to_prev()
+                    app.move_to_prev();
                 } else if app.editing().is_some() {
-                    app.move_cursor_left()
+                    app.move_cursor_left();
                 } else {
-                    app.move_left()
+                    app.move_left();
                 }
             }
             KeyCode::Right => {
                 if key_event.modifiers.contains(KeyModifiers::SHIFT) {
-                    app.move_to_next()
+                    app.move_to_next();
                 } else if app.editing().is_some() {
-                    app.move_cursor_right()
+                    app.move_cursor_right();
                 } else {
-                    app.move_right()
+                    app.move_right();
                 }
             }
             KeyCode::Backspace => app.delete_char(),
             KeyCode::Enter => {
                 if app.editing().is_some() {
-                    app.exit_editing_mode()
+                    app.exit_editing_mode();
                 } else {
-                    app.enter_editing_mode()
+                    app.enter_editing_mode();
                 }
             }
             KeyCode::Esc => app.exit_editing_mode(),
             KeyCode::Char(c) => {
                 if app.editing().is_some() {
-                    app.insert_char(c)
+                    app.insert_char(c);
                 } else {
                     match c {
                         'q' => app.exit(),
@@ -75,9 +75,9 @@ fn update(app: &mut Model) -> io::Result<()> {
                         'c' => app.move_to_today(),
                         'n' => {
                             if app.has_entry() {
-                                app.insert_new_item()
+                                app.insert_new_item();
                             } else {
-                                app.create_new_entry()
+                                app.create_new_entry();
                             }
                         }
                         'e' => app.append_new_event(),
@@ -90,7 +90,7 @@ fn update(app: &mut Model) -> io::Result<()> {
             _ => {}
         },
         _ => {}
-    };
+    }
     Ok(())
 }
 
@@ -127,7 +127,8 @@ fn view(model: &mut Model, frame: &mut Frame) {
             .events_iter()
             .expect("checked that model has entry")
             .map(|x| ListItem::new(x.title.to_string()));
-        let events_widget = List::from_iter(events_items)
+        let events_widget = events_items
+            .collect::<List>()
             .block(events_block)
             .highlight_style(Style::new().fg(Color::Red));
 
@@ -139,7 +140,8 @@ fn view(model: &mut Model, frame: &mut Frame) {
             .tasks_iter()
             .expect("checked that model has entry")
             .map(|x| ListItem::new(format_tasks(x)));
-        let task_widget = List::from_iter(task_items)
+        let task_widget = task_items
+            .collect::<List>()
             .block(task_block)
             .highlight_style(Style::new().fg(Color::Yellow));
 

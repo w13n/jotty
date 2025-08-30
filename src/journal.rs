@@ -159,7 +159,7 @@ impl Event {
     }
 
     pub fn cycle(&mut self) {
-        self.importance = self.importance.cycle()
+        self.importance = self.importance.cycle();
     }
 }
 
@@ -191,7 +191,7 @@ impl Task {
     }
 
     pub fn cycle(&mut self) {
-        self.completion_level = self.completion_level.cycle()
+        self.completion_level = self.completion_level.cycle();
     }
 }
 
