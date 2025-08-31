@@ -1,10 +1,11 @@
 use std::io;
 
 use crate::app::Model;
-use crate::journal::{CompletionLevel, Task};
-use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
+use crate::journal::{CompletionLevel, Event, Importance, Task};
+use crossterm::event::{self, KeyCode, KeyEventKind, KeyModifiers};
 use ratatui::layout::Position;
 use ratatui::prelude::Color;
+use ratatui::text::Span;
 use ratatui::widgets::ListItem;
 use ratatui::{
     Frame,
@@ -35,60 +36,62 @@ fn main() -> io::Result<()> {
 
 fn update(app: &mut Model) -> io::Result<()> {
     match event::read()? {
-        Event::Key(key_event) if key_event.kind == KeyEventKind::Press => match key_event.code {
-            KeyCode::Up => app.move_up(),
-            KeyCode::Down => app.move_down(),
-            KeyCode::Left => {
-                if key_event.modifiers.contains(KeyModifiers::SHIFT) {
-                    app.move_to_prev();
-                } else if app.editing().is_some() {
-                    app.move_cursor_left();
-                } else {
-                    app.move_left();
-                }
-            }
-            KeyCode::Right => {
-                if key_event.modifiers.contains(KeyModifiers::SHIFT) {
-                    app.move_to_next();
-                } else if app.editing().is_some() {
-                    app.move_cursor_right();
-                } else {
-                    app.move_right();
-                }
-            }
-            KeyCode::Backspace => app.delete_char(),
-            KeyCode::Enter => {
-                if app.editing().is_some() {
-                    app.exit_editing_mode();
-                } else {
-                    app.enter_editing_mode();
-                }
-            }
-            KeyCode::Esc => app.exit_editing_mode(),
-            KeyCode::Char(c) => {
-                if app.editing().is_some() {
-                    app.insert_char(c);
-                } else {
-                    match c {
-                        'q' => app.exit(),
-                        ' ' => app.cycle(),
-                        'c' => app.move_to_today(),
-                        'n' => {
-                            if app.has_entry() {
-                                app.insert_new_item();
-                            } else {
-                                app.create_new_entry();
-                            }
-                        }
-                        'e' => app.append_new_event(),
-                        't' => app.append_new_task(),
-                        'd' => app.delete(),
-                        _ => {}
+        event::Event::Key(key_event) if key_event.kind == KeyEventKind::Press => {
+            match key_event.code {
+                KeyCode::Up => app.move_up(),
+                KeyCode::Down => app.move_down(),
+                KeyCode::Left => {
+                    if key_event.modifiers.contains(KeyModifiers::SHIFT) {
+                        app.move_to_prev();
+                    } else if app.editing().is_some() {
+                        app.move_cursor_left();
+                    } else {
+                        app.move_left();
                     }
                 }
+                KeyCode::Right => {
+                    if key_event.modifiers.contains(KeyModifiers::SHIFT) {
+                        app.move_to_next();
+                    } else if app.editing().is_some() {
+                        app.move_cursor_right();
+                    } else {
+                        app.move_right();
+                    }
+                }
+                KeyCode::Backspace => app.delete_char(),
+                KeyCode::Enter => {
+                    if app.editing().is_some() {
+                        app.exit_editing_mode();
+                    } else {
+                        app.enter_editing_mode();
+                    }
+                }
+                KeyCode::Esc => app.exit_editing_mode(),
+                KeyCode::Char(c) => {
+                    if app.editing().is_some() {
+                        app.insert_char(c);
+                    } else {
+                        match c {
+                            'q' => app.exit(),
+                            ' ' => app.cycle(),
+                            'c' => app.move_to_today(),
+                            'n' => {
+                                if app.has_entry() {
+                                    app.insert_new_item();
+                                } else {
+                                    app.create_new_entry();
+                                }
+                            }
+                            'e' => app.append_new_event(),
+                            't' => app.append_new_task(),
+                            'd' => app.delete(),
+                            _ => {}
+                        }
+                    }
+                }
+                _ => {}
             }
-            _ => {}
-        },
+        }
         _ => {}
     }
     Ok(())
@@ -126,7 +129,7 @@ fn view(model: &mut Model, frame: &mut Frame) {
         let events_items = model
             .events_iter()
             .expect("checked that model has entry")
-            .map(|x| ListItem::new(x.title.to_string()));
+            .map(|x| ListItem::new(format_events(x)));
         let events_widget = events_items
             .collect::<List>()
             .block(events_block)
@@ -181,5 +184,12 @@ fn format_tasks(task: &Task) -> String {
         CompletionLevel::Full => {
             format!(" ● {}", &task.title)
         }
+    }
+}
+
+fn format_events(event: &Event) -> Span<'static> {
+    match event.importance {
+        Importance::Normal => Span::from(event.title.clone()),
+        Importance::High => event.title.clone().bold(),
     }
 }
