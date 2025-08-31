@@ -16,14 +16,16 @@ use ratatui::{
     text::Line,
     widgets::{Block, List, Paragraph},
 };
-use time::{Date, Month};
+use time::{Date, Month, OffsetDateTime};
 
 mod app;
 mod journal;
 
 fn main() -> io::Result<()> {
     let mut terminal = ratatui::init();
-    let date = Date::from_calendar_date(2025, Month::August, 15).unwrap();
+    let date = OffsetDateTime::now_local()
+        .unwrap_or(OffsetDateTime::now_utc())
+        .date();
     let mut model = Model::new(date);
 
     while !model.should_exit() {
