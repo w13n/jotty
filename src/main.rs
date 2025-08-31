@@ -1,4 +1,5 @@
 use std::io;
+use std::time::Duration;
 
 use crate::app::Model;
 use crate::journal::{CompletionLevel, Event, Importance, Task};
@@ -16,7 +17,7 @@ use ratatui::{
     text::Line,
     widgets::{Block, List, Paragraph},
 };
-use time::{Date, Month, OffsetDateTime};
+use time::OffsetDateTime;
 
 mod app;
 mod journal;
@@ -37,6 +38,14 @@ fn main() -> io::Result<()> {
 }
 
 fn update(app: &mut Model) -> io::Result<()> {
+    single_update(app)?; // blocking so that updates do not go out spuriously
+    while event::poll(Duration::ZERO)? {
+        single_update(app)?;
+    }
+    Ok(())
+}
+
+fn single_update(app: &mut Model) -> io::Result<()> {
     match event::read()? {
         event::Event::Key(key_event) if key_event.kind == KeyEventKind::Press => {
             match key_event.code {
