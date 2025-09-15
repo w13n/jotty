@@ -2,6 +2,8 @@ use crate::journal::{Event, Journal, Task};
 use ratatui::widgets::ListState;
 use time::{Date, OffsetDateTime};
 
+mod tasks;
+
 pub struct Model {
     journal: Journal,
     date: Date,
