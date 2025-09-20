@@ -1,9 +1,12 @@
+use std::io::Result;
+
+use ratatui::DefaultTerminal;
 use ratatui::layout::Position;
 use ratatui::prelude::Color;
 use ratatui::text::Span;
 use ratatui::widgets::ListItem;
+use ratatui::widgets::ListState;
 use ratatui::{
-    Frame,
     layout::{Constraint, Layout},
     style::Style,
     style::Stylize,
@@ -11,78 +14,341 @@ use ratatui::{
     text::Line,
     widgets::{Block, List, Paragraph},
 };
+use time::{Date, OffsetDateTime};
 
+use crate::model::Model;
 use crate::model::{CompletionLevel, Event, Importance, Task};
 
-pub fn view(model: &mut crate::Model, frame: &mut Frame) {
-    let [_top, middle, _bottom] =
-        Layout::vertical([Constraint::Max(1), Constraint::Min(1), Constraint::Max(1)])
-            .areas(frame.area());
-    let [events_rect, tasks_rect] =
-        Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)]).areas(middle);
+pub struct View {
+    terminal: DefaultTerminal,
+    model: Box<dyn Model>,
+    date: Date,
+    editing: Option<usize>,
+    events_state: ListState,
+    task_state: ListState,
+}
 
-    let title = Line::from(vec![
-        "Jotty".green().bold(),
-        " entry on ".bold(),
-        model.date().to_string().blue().bold(),
-    ]);
-    let instructions =
-        Line::from("<q> to quit; <←↑↓→> to navigate; <SPACE> to cycle; <ENTER> to type".gray());
-    let container_block = Block::new()
-        .title(title.centered())
-        .title_bottom(instructions.centered());
+impl View {
+    pub fn new(model: Box<dyn Model>, terminal: DefaultTerminal) -> Self {
+        let date = OffsetDateTime::now_local()
+            .unwrap_or(OffsetDateTime::now_utc())
+            .date();
 
-    let container = Paragraph::new("no entry for this date")
-        .centered()
-        .block(container_block);
+        Self {
+            terminal,
+            model,
+            date,
+            editing: None,
+            events_state: ListState::default(),
+            task_state: ListState::default(),
+        }
+    }
 
-    frame.render_widget(container, frame.area());
+    pub fn render(&mut self) -> Result<()> {
+        self.terminal.draw(|frame| {
+            let [_top, middle, _bottom] =
+                Layout::vertical([Constraint::Max(1), Constraint::Min(1), Constraint::Max(1)])
+                    .areas(frame.area());
+            let [events_rect, tasks_rect] =
+                Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
+                    .areas(middle);
 
-    if model.events_len() != 0 || model.tasks_len() != 0 {
-        let events_title = Line::from(" Events ".red().bold());
-        let events_block = Block::bordered()
-            .title(events_title.centered())
-            .border_set(border::ROUNDED);
+            let title = Line::from(vec![
+                "Jotty".green().bold(),
+                " entry on ".bold(),
+                self.date.to_string().blue().bold(),
+            ]);
+            let instructions = Line::from(
+                "<q> to quit; <←↑↓→> to navigate; <SPACE> to cycle; <ENTER> to type".gray(),
+            );
+            let container_block = Block::new()
+                .title(title.centered())
+                .title_bottom(instructions.centered());
 
-        let events_widget = model
-            .events_iter()
-            .map(|x| ListItem::new(format_events(*x)))
-            .collect::<List>()
-            .block(events_block)
-            .highlight_style(Style::new().fg(Color::Red));
+            let container = Paragraph::new("no entry for this date")
+                .centered()
+                .block(container_block);
 
-        let task_title = Line::from(" Tasks ".yellow().bold());
-        let task_block = Block::bordered()
-            .title(task_title.centered())
-            .border_set(border::ROUNDED);
-        let task_widget = model
-            .tasks_iter()
-            .map(|x| ListItem::new(format_tasks(*x)))
-            .collect::<List>()
-            .block(task_block)
-            .highlight_style(Style::new().fg(Color::Yellow));
+            frame.render_widget(container, frame.area());
 
-        frame.render_stateful_widget(events_widget, events_rect, &mut model.events_state);
-        frame.render_stateful_widget(task_widget, tasks_rect, &mut model.task_state);
-        if let Some(offset) = model.editing() {
-            let is_events_side = model.events_state.selected().is_some();
-            let selected = if is_events_side {
-                model.events_state.selected().unwrap()
-            } else {
-                model.task_state.selected().unwrap()
-            };
-            let position = if is_events_side {
-                Position::new(
-                    events_rect.x + 1 + offset as u16,
-                    events_rect.y + 1 + selected as u16,
-                )
-            } else {
-                Position::new(
-                    tasks_rect.x + 4 + offset as u16,
-                    tasks_rect.y + 1 + selected as u16,
-                )
-            };
-            frame.set_cursor_position(position);
+            if self.model.events_len(self.date) != 0 || self.model.tasks_len(self.date) != 0 {
+                let events_title = Line::from(" Events ".red().bold());
+                let events_block = Block::bordered()
+                    .title(events_title.centered())
+                    .border_set(border::ROUNDED);
+
+                let events_widget = self
+                    .model
+                    .events_iter(self.date)
+                    .map(|x| ListItem::new(format_events(*x)))
+                    .collect::<List>()
+                    .block(events_block)
+                    .highlight_style(Style::new().fg(Color::Red));
+
+                let task_title = Line::from(" Tasks ".yellow().bold());
+                let task_block = Block::bordered()
+                    .title(task_title.centered())
+                    .border_set(border::ROUNDED);
+                let task_widget = self
+                    .model
+                    .tasks_iter(self.date)
+                    .map(|x| ListItem::new(format_tasks(*x)))
+                    .collect::<List>()
+                    .block(task_block)
+                    .highlight_style(Style::new().fg(Color::Yellow));
+
+                frame.render_stateful_widget(events_widget, events_rect, &mut self.events_state);
+                frame.render_stateful_widget(task_widget, tasks_rect, &mut self.task_state);
+                if let Some(offset) = self.editing {
+                    let is_events_side = self.events_state.selected().is_some();
+                    let selected = if is_events_side {
+                        self.events_state.selected().unwrap()
+                    } else {
+                        self.task_state.selected().unwrap()
+                    };
+                    let position = if is_events_side {
+                        Position::new(
+                            events_rect.x + 1 + offset as u16,
+                            events_rect.y + 1 + selected as u16,
+                        )
+                    } else {
+                        Position::new(
+                            tasks_rect.x + 4 + offset as u16,
+                            tasks_rect.y + 1 + selected as u16,
+                        )
+                    };
+                    frame.set_cursor_position(position);
+                }
+            }
+        })?;
+        Ok(())
+    }
+
+    pub fn move_up(&mut self) {
+        self.editing = None;
+        if self.events_state.selected().is_some() {
+            self.events_state.select_previous();
+        } else if self.task_state.selected().is_some() {
+            self.task_state.select_previous();
+        }
+    }
+
+    pub fn move_down(&mut self) {
+        self.editing = None;
+        if self.events_state.selected().is_some() {
+            self.events_state.select_next();
+        } else if self.task_state.selected().is_some() {
+            self.task_state.select_next();
+        }
+    }
+
+    pub fn move_left(&mut self) {
+        self.editing = None;
+        if self.task_state.selected().is_some() && self.model.events_len(self.date) > 0 {
+            self.events_state.select(self.task_state.selected());
+            self.task_state.select(None);
+        }
+    }
+
+    pub fn move_right(&mut self) {
+        self.editing = None;
+        if self.events_state.selected().is_some() && self.model.tasks_len(self.date) > 0 {
+            self.task_state.select(self.events_state.selected());
+            self.events_state.select(None);
+        }
+    }
+
+    pub fn cycle(&mut self) {
+        self.editing = None;
+        if let Some(idx) = self.task_state.selected() {
+            self.model
+                .cycle_task(self.date, idx)
+                .expect("selected cannot be out of range");
+        } else if let Some(idx) = self.events_state.selected() {
+            self.model
+                .cycle_event(self.date, idx)
+                .expect("selected cannot be out of range");
+        }
+    }
+
+    pub fn move_to_next(&mut self) {
+        self.move_to(self.date.next_day().expect("we will never reach max date"));
+    }
+
+    pub fn move_to_prev(&mut self) {
+        self.move_to(
+            self.date
+                .previous_day()
+                .expect("we will never reach minimum date"),
+        );
+    }
+
+    pub fn move_to_today(&mut self) {
+        self.move_to(
+            OffsetDateTime::now_local()
+                .unwrap_or(OffsetDateTime::now_utc())
+                .date(),
+        );
+    }
+
+    fn move_to(&mut self, date: Date) {
+        self.editing = None;
+        self.date = date;
+        if self.task_state.selected().is_some() && self.model.tasks_len(date) == 0 {
+            if self.model.events_len(date) > 0 {
+                self.events_state.select(self.task_state.selected());
+            }
+            self.task_state.select(None);
+        } else if self.events_state.selected().is_some() && self.model.events_len(date) == 0 {
+            if self.model.tasks_len(date) > 0 {
+                self.task_state.select(self.events_state.selected());
+            }
+            self.events_state.select(None);
+        } else if self.task_state.selected().is_none() && self.task_state.selected().is_none() {
+            if self.model.events_len(date) > 0 {
+                self.events_state.select(Some(0));
+            } else if self.model.tasks_len(date) > 0 {
+                self.task_state.select(Some(0));
+            }
+        }
+    }
+
+    pub fn enter_editing_mode(&mut self) {
+        if let Some(editing_str) = self.get_editing_string() {
+            self.editing = Some(editing_str.len());
+        }
+    }
+
+    pub fn exit_editing_mode(&mut self) {
+        self.editing = None;
+    }
+
+    pub fn move_cursor_left(&mut self) {
+        self.editing = self.editing.map(|x| if x > 0 { x - 1 } else { x });
+    }
+
+    pub fn move_cursor_right(&mut self) {
+        if let Some(len) = self.get_editing_string().map(str::len) {
+            self.editing = self.editing.map(|x| if x < len { x + 1 } else { x });
+        }
+    }
+
+    pub fn insert_char(&mut self, c: char) {
+        if let Some(idx) = self.editing {
+            let mut new_str = self
+                .get_editing_string()
+                .expect("editing has some")
+                .to_string();
+            new_str.insert(idx, c);
+            self.update_editing_string(&new_str);
+            self.editing = self.editing.map(|x| x + 1);
+        }
+    }
+
+    pub fn delete_char(&mut self) {
+        if let Some(editing) = self.editing {
+            if let Some(str) = self.get_editing_string() {
+                let mut new_str = str.to_string();
+                new_str.remove(editing - 1);
+                if editing > 0 {
+                    self.update_editing_string(&new_str);
+                    self.editing = self.editing.map(|x| x - 1);
+                }
+            }
+        }
+    }
+
+    pub fn append_new_event(&mut self) {
+        let idx = self.model.events_len(self.date);
+        self.model
+            .new_event(self.date, idx)
+            .expect("idx was set based on length");
+        self.events_state.selected_mut().replace(idx);
+        self.task_state.selected_mut().take();
+        self.editing = Some(0);
+    }
+
+    pub fn append_new_task(&mut self) {
+        let idx = self.model.tasks_len(self.date);
+        self.model
+            .new_task(self.date, idx)
+            .expect("idx was set based on length");
+        self.task_state.selected_mut().replace(idx);
+        self.events_state.selected_mut().take();
+        self.editing = Some(0);
+    }
+
+    pub fn insert_new_item(&mut self) {
+        if let Some(idx) = self.events_state.selected() {
+            self.model
+                .new_event(self.date, idx)
+                .expect("idx was set based on selected");
+            self.editing = Some(0);
+        } else if let Some(idx) = self.task_state.selected() {
+            self.model
+                .new_task(self.date, idx)
+                .expect("idx was set based on selected");
+            self.editing = Some(0);
+        }
+    }
+
+    pub fn delete(&mut self) {
+        self.editing = None;
+        if let Some(idx) = self.events_state.selected() {
+            self.model
+                .delete_event(self.date, idx)
+                .expect("the item is selected");
+            if self.model.events_len(self.date) == 0 {
+                self.events_state.select(None);
+                if self.model.tasks_len(self.date) > 0 {
+                    self.task_state.select(Some(idx));
+                }
+            }
+        } else if let Some(idx) = self.task_state.selected() {
+            self.model
+                .delete_task(self.date, idx)
+                .expect("the item is selected");
+            if self.model.tasks_len(self.date) == 0 {
+                self.task_state.select(None);
+                if self.model.events_len(self.date) > 0 {
+                    self.events_state.select(Some(idx));
+                }
+            }
+        }
+    }
+
+    pub fn is_editing(&self) -> bool {
+        self.editing.is_some()
+    }
+
+    fn get_editing_string(&mut self) -> Option<&str> {
+        if let Some(row_idx) = self.events_state.selected() {
+            return Some(
+                self.model
+                    .get_event(self.date, row_idx)
+                    .expect("selected cannot be out of range")
+                    .title(),
+            );
+        } else if let Some(row_idx) = self.task_state.selected() {
+            return Some(
+                self.model
+                    .get_task(self.date, row_idx)
+                    .expect("selected cannot be out of range")
+                    .title(),
+            );
+        }
+        None
+    }
+
+    fn update_editing_string(&mut self, string: &str) {
+        if let Some(row_idx) = self.events_state.selected() {
+            self.model
+                .update_event_title(self.date, row_idx, &string)
+                .expect("index cannot be out of bounds");
+        } else if let Some(row_idx) = self.task_state.selected() {
+            self.model
+                .update_task_title(self.date, row_idx, &string)
+                .expect("index cannot be out of bounds");
         }
     }
 }

@@ -3,12 +3,12 @@ use std::collections::HashMap;
 use std::iter;
 use time::Date;
 
-use super::{BuJo, CompletionLevel, Event, Importance, Task};
+use super::{CompletionLevel, Event, Importance, Model, Task};
 
 #[derive(Default)]
-pub struct MapBujo(HashMap<Date, Entry>);
+pub struct MemModel(HashMap<Date, Entry>);
 
-impl BuJo for MapBujo {
+impl Model for MemModel {
     fn new_event(&mut self, date: Date, index: usize) -> Result<()> {
         let events = &mut self.0.entry(date).or_default().events;
 
