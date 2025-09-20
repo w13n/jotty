@@ -1,11 +1,9 @@
-use crate::journal::{Event, Journal, Task};
+use crate::journal::{BuJo, Event, Task};
 use ratatui::widgets::ListState;
 use time::{Date, OffsetDateTime};
 
-mod tasks;
-
 pub struct Model {
-    journal: Journal,
+    journal: Box<dyn BuJo>,
     date: Date,
     editing: Option<usize>,
     pub events_state: ListState,
@@ -14,9 +12,9 @@ pub struct Model {
 }
 
 impl Model {
-    pub fn new(date: Date) -> Self {
+    pub fn new(date: Date, journal: Box<dyn BuJo>) -> Self {
         Self {
-            journal: Journal::new(),
+            journal,
             date,
             editing: None,
             events_state: ListState::default(),
@@ -49,13 +47,7 @@ impl Model {
 
     pub fn move_left(&mut self) {
         self.editing = None;
-        if self.task_state.selected().is_some()
-            && self
-                .journal
-                .events_len(&self.date)
-                .expect("task state has something selected")
-                > 0
-        {
+        if self.task_state.selected().is_some() && self.journal.events_len(self.date) > 0 {
             self.events_state.select(self.task_state.selected());
             self.task_state.select(None);
         }
@@ -63,13 +55,7 @@ impl Model {
 
     pub fn move_right(&mut self) {
         self.editing = None;
-        if self.events_state.selected().is_some()
-            && self
-                .journal
-                .tasks_len(&self.date)
-                .expect("event state has something selected")
-                > 0
-        {
+        if self.events_state.selected().is_some() && self.journal.tasks_len(self.date) > 0 {
             self.task_state.select(self.events_state.selected());
             self.events_state.select(None);
         }
@@ -79,14 +65,12 @@ impl Model {
         self.editing = None;
         if let Some(idx) = self.task_state.selected() {
             self.journal
-                .get_task_mut(&self.date, idx)
+                .cycle_task(self.date, idx)
                 .expect("selected cannot be out of range")
-                .cycle();
         } else if let Some(idx) = self.events_state.selected() {
             self.journal
-                .get_event_mut(&self.date, idx)
-                .expect("selected cannot be out of range")
-                .cycle();
+                .cycle_event(self.date, idx)
+                .expect("selected cannot be out of range");
         }
     }
 
@@ -113,31 +97,22 @@ impl Model {
     fn move_to(&mut self, date: Date) {
         self.editing = None;
         self.date = date;
-        if self.task_state.selected().is_some() && self.journal.tasks_len(&date).unwrap_or(0) == 0 {
-            if self.journal.events_len(&date).unwrap_or(0) > 0 {
+        if self.task_state.selected().is_some() && self.journal.tasks_len(date) == 0 {
+            if self.journal.events_len(date) > 0 {
                 self.events_state.select(self.task_state.selected());
             }
             self.task_state.select(None);
-        } else if self.events_state.selected().is_some()
-            && self.journal.events_len(&date).unwrap_or(0) == 0
-        {
-            if self.journal.tasks_len(&date).unwrap_or(0) > 0 {
+        } else if self.events_state.selected().is_some() && self.journal.events_len(date) == 0 {
+            if self.journal.tasks_len(date) > 0 {
                 self.task_state.select(self.events_state.selected());
             }
             self.events_state.select(None);
         } else if self.task_state.selected().is_none() && self.task_state.selected().is_none() {
-            if self.journal.events_len(&date).unwrap_or(0) > 0 {
+            if self.journal.events_len(date) > 0 {
                 self.events_state.select(Some(0));
-            } else if self.journal.tasks_len(&date).unwrap_or(0) > 0 {
+            } else if self.journal.tasks_len(date) > 0 {
                 self.task_state.select(Some(0));
             }
-        }
-    }
-
-    pub fn create_new_entry(&mut self) {
-        self.editing = None;
-        if !self.journal.contains_day(&self.date) {
-            self.journal.new_entry(self.date);
         }
     }
 
@@ -163,17 +138,23 @@ impl Model {
 
     pub fn insert_char(&mut self, c: char) {
         if let Some(idx) = self.editing() {
-            let str = self.get_editing_string().expect("editing has some");
-            str.insert(idx, c);
+            let mut new_str = self
+                .get_editing_string()
+                .expect("editing has some")
+                .to_string();
+            new_str.insert(idx, c);
+            self.update_editing_string(new_str);
             self.editing = self.editing.map(|x| x + 1);
         }
     }
 
     pub fn delete_char(&mut self) {
         if let Some(editing) = self.editing {
-            if let Some(x) = self.get_editing_string() {
+            if let Some(str) = self.get_editing_string() {
+                let mut new_str = str.to_string();
+                new_str.remove(editing - 1);
                 if editing > 0 {
-                    x.remove(editing - 1);
+                    self.update_editing_string(new_str);
                     self.editing = self.editing.map(|x| x - 1);
                 }
             }
@@ -181,42 +162,36 @@ impl Model {
     }
 
     pub fn append_new_event(&mut self) {
-        if self.has_entry() {
-            let idx = self.journal.events_len(&self.date).expect("self has entry");
-            self.journal
-                .new_event(&self.date, idx)
-                .expect("idx was set based on length");
-            self.events_state.selected_mut().replace(idx);
-            self.task_state.selected_mut().take();
-            self.editing = Some(0);
-        }
+        let idx = self.journal.events_len(self.date);
+        self.journal
+            .new_event(self.date, idx)
+            .expect("idx was set based on length");
+        self.events_state.selected_mut().replace(idx);
+        self.task_state.selected_mut().take();
+        self.editing = Some(0);
     }
 
     pub fn append_new_task(&mut self) {
-        if self.has_entry() {
-            let idx = self.journal.tasks_len(&self.date).expect("self has entry");
-            self.journal
-                .new_task(&self.date, idx)
-                .expect("idx was set based on length");
-            self.task_state.selected_mut().replace(idx);
-            self.events_state.selected_mut().take();
-            self.editing = Some(0);
-        }
+        let idx = self.journal.tasks_len(self.date);
+        self.journal
+            .new_task(self.date, idx)
+            .expect("idx was set based on length");
+        self.task_state.selected_mut().replace(idx);
+        self.events_state.selected_mut().take();
+        self.editing = Some(0);
     }
 
     pub fn insert_new_item(&mut self) {
-        if self.has_entry() {
-            if let Some(idx) = self.events_state.selected() {
-                self.journal
-                    .new_event(&self.date, idx)
-                    .expect("idx was set based on selected");
-                self.editing = Some(0);
-            } else if let Some(idx) = self.task_state.selected() {
-                self.journal
-                    .new_task(&self.date, idx)
-                    .expect("idx was set based on selected");
-                self.editing = Some(0);
-            }
+        if let Some(idx) = self.events_state.selected() {
+            self.journal
+                .new_event(self.date, idx)
+                .expect("idx was set based on selected");
+            self.editing = Some(0);
+        } else if let Some(idx) = self.task_state.selected() {
+            self.journal
+                .new_task(self.date, idx)
+                .expect("idx was set based on selected");
+            self.editing = Some(0);
         }
     }
 
@@ -224,42 +199,18 @@ impl Model {
         self.editing = None;
         if let Some(idx) = self.events_state.selected() {
             self.journal
-                .delete_event(&self.date, idx)
+                .delete_event(self.date, idx)
                 .expect("the item is selected");
-            if self
-                .journal
-                .events_len(&self.date)
-                .expect("an item was selected")
-                == 0
-                && self
-                    .journal
-                    .tasks_len(&self.date)
-                    .expect("an item was selected")
-                    > 0
-            {
+            if self.journal.events_len(self.date) == 0 && self.journal.tasks_len(self.date) > 0 {
                 self.task_state.select(Some(idx));
             }
         } else if let Some(idx) = self.task_state.selected() {
             self.journal
-                .delete_task(&self.date, idx)
+                .delete_task(self.date, idx)
                 .expect("the item is selected");
-            if self
-                .journal
-                .tasks_len(&self.date)
-                .expect("an item was selected")
-                == 0
-                && self
-                    .journal
-                    .events_len(&self.date)
-                    .expect("an item was selected")
-                    > 0
-            {
+            if self.journal.tasks_len(self.date) == 0 && self.journal.events_len(self.date) > 0 {
                 self.events_state.select(Some(idx));
             }
-        } else if self.has_entry() {
-            self.journal
-                .delete_entry(&self.date)
-                .expect("we have the entry");
         }
     }
 
@@ -275,36 +226,50 @@ impl Model {
         &self.date
     }
 
-    pub fn has_entry(&self) -> bool {
-        self.journal.contains_day(&self.date)
+    pub fn tasks_len(&self) -> usize {
+        self.journal.tasks_len(self.date)
     }
 
-    pub fn tasks_iter(&self) -> Option<std::slice::Iter<'_, Task>> {
-        self.journal.tasks_iter(&self.date)
+    pub fn events_len(&self) -> usize {
+        self.journal.events_len(self.date)
     }
 
-    pub fn events_iter(&self) -> Option<std::slice::Iter<'_, Event>> {
-        self.journal.events_iter(&self.date)
+    pub fn tasks_iter<'a>(&'a self) -> Box<dyn Iterator<Item = Box<&'a dyn Task<'a>>> + 'a> {
+        self.journal.tasks_iter(self.date)
     }
 
-    fn get_editing_string(&mut self) -> Option<&mut String> {
+    pub fn events_iter<'a>(&'a self) -> Box<dyn Iterator<Item = Box<&'a dyn Event<'a>>> + 'a> {
+        self.journal.events_iter(self.date)
+    }
+
+    fn get_editing_string(&mut self) -> Option<&str> {
         if let Some(row_idx) = self.events_state.selected() {
             return Some(
-                &mut self
-                    .journal
-                    .get_event_mut(&self.date, row_idx)
+                self.journal
+                    .get_event(self.date, row_idx)
                     .expect("selected cannot be out of range")
-                    .title,
+                    .title(),
             );
         } else if let Some(row_idx) = self.task_state.selected() {
             return Some(
-                &mut self
-                    .journal
-                    .get_task_mut(&self.date, row_idx)
+                self.journal
+                    .get_task(self.date, row_idx)
                     .expect("selected cannot be out of range")
-                    .title,
+                    .title(),
             );
         }
         None
+    }
+
+    fn update_editing_string(&mut self, string: String) {
+        if let Some(row_idx) = self.events_state.selected() {
+            self.journal
+                .update_event_title(self.date, row_idx, &string)
+                .expect("index cannot be out of bounds")
+        } else if let Some(row_idx) = self.task_state.selected() {
+            self.journal
+                .update_task_title(self.date, row_idx, &string)
+                .expect("index cannot be out of bounds")
+        }
     }
 }

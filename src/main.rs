@@ -2,7 +2,7 @@ use std::io;
 use std::time::Duration;
 
 use crate::app::Model;
-use crate::journal::{CompletionLevel, Event, Importance, Task};
+use crate::journal::{CompletionLevel, Event, Importance, MapBujo, Task};
 use crossterm::event::{self, KeyCode, KeyEventKind, KeyModifiers};
 use ratatui::layout::Position;
 use ratatui::prelude::Color;
@@ -27,7 +27,7 @@ fn main() -> io::Result<()> {
     let date = OffsetDateTime::now_local()
         .unwrap_or(OffsetDateTime::now_utc())
         .date();
-    let mut model = Model::new(date);
+    let mut model = Model::new(date, Box::new(MapBujo::default()));
 
     while !model.should_exit() {
         terminal.draw(|frame| view(&mut model, frame))?;
@@ -87,11 +87,7 @@ fn single_update(app: &mut Model) -> io::Result<()> {
                             ' ' => app.cycle(),
                             'c' => app.move_to_today(),
                             'n' => {
-                                if app.has_entry() {
-                                    app.insert_new_item();
-                                } else {
-                                    app.create_new_entry();
-                                }
+                                app.insert_new_item();
                             }
                             'e' => app.append_new_event(),
                             't' => app.append_new_task(),
@@ -132,16 +128,15 @@ fn view(model: &mut Model, frame: &mut Frame) {
 
     frame.render_widget(container, frame.area());
 
-    if model.has_entry() {
+    if model.events_len() != 0 || model.tasks_len() != 0 {
         let events_title = Line::from(" Events ".red().bold());
         let events_block = Block::bordered()
             .title(events_title.centered())
             .border_set(border::ROUNDED);
-        let events_items = model
+
+        let events_widget = model
             .events_iter()
-            .expect("checked that model has entry")
-            .map(|x| ListItem::new(format_events(x)));
-        let events_widget = events_items
+            .map(|x| ListItem::new(format_events(*x)))
             .collect::<List>()
             .block(events_block)
             .highlight_style(Style::new().fg(Color::Red));
@@ -150,11 +145,9 @@ fn view(model: &mut Model, frame: &mut Frame) {
         let task_block = Block::bordered()
             .title(task_title.centered())
             .border_set(border::ROUNDED);
-        let task_items = model
+        let task_widget = model
             .tasks_iter()
-            .expect("checked that model has entry")
-            .map(|x| ListItem::new(format_tasks(x)));
-        let task_widget = task_items
+            .map(|x| ListItem::new(format_tasks(*x)))
             .collect::<List>()
             .block(task_block)
             .highlight_style(Style::new().fg(Color::Yellow));
@@ -184,23 +177,23 @@ fn view(model: &mut Model, frame: &mut Frame) {
     }
 }
 
-fn format_tasks(task: &Task) -> String {
-    match task.completion_level {
+fn format_tasks<'a>(task: &'a (dyn Task<'a> + 'a)) -> String {
+    match task.completion_level() {
         CompletionLevel::None => {
-            format!(" ○ {}", &task.title)
+            format!(" ○ {}", &task.title())
         }
         CompletionLevel::Partial => {
-            format!(" ◐ {}", &task.title)
+            format!(" ◐ {}", &task.title())
         }
         CompletionLevel::Full => {
-            format!(" ● {}", &task.title)
+            format!(" ● {}", &task.title())
         }
     }
 }
 
-fn format_events(event: &Event) -> Span<'static> {
-    match event.importance {
-        Importance::Normal => Span::from(event.title.clone()),
-        Importance::High => event.title.clone().bold(),
+fn format_events<'a>(event: &'a (dyn Event<'a> + 'a)) -> Span<'static> {
+    match event.importance() {
+        Importance::Normal => Span::from(event.title().to_owned()),
+        Importance::High => event.title().to_owned().clone().bold(),
     }
 }
