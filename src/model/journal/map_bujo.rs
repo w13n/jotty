@@ -147,26 +147,20 @@ impl BuJo for MapBujo {
         &'a self,
         date: Date,
     ) -> Box<dyn Iterator<Item = Box<&'a dyn Event<'a>>> + 'a> {
-        self.0
-            .get(&date)
-            .map(|x| {
-                Box::new(x.events.iter().map(|e| Box::new(e as &'a dyn Event)))
-                    as Box<dyn Iterator<Item = Box<&dyn Event>>>
-            })
-            .unwrap_or(Box::new(iter::empty()))
+        self.0.get(&date).map_or(Box::new(iter::empty()), |x| {
+            Box::new(x.events.iter().map(|e| Box::new(e as &'a dyn Event)))
+                as Box<dyn Iterator<Item = Box<&dyn Event>>>
+        })
     }
 
     fn tasks_iter<'a>(
         &'a self,
         date: Date,
     ) -> Box<dyn Iterator<Item = Box<&'a dyn Task<'a>>> + 'a> {
-        self.0
-            .get(&date)
-            .map(|x| {
-                Box::new(x.tasks.iter().map(|t| Box::new(t as &dyn Task)))
-                    as Box<dyn Iterator<Item = Box<&dyn Task>>>
-            })
-            .unwrap_or(Box::new(iter::empty()))
+        self.0.get(&date).map_or(Box::new(iter::empty()), |x| {
+            Box::new(x.tasks.iter().map(|t| Box::new(t as &dyn Task)))
+                as Box<dyn Iterator<Item = Box<&dyn Task>>>
+        })
     }
 }
 
@@ -184,7 +178,7 @@ pub struct MemEvent {
 
 impl MemEvent {
     fn cycle(&mut self) {
-        self.importance = self.importance.cycle()
+        self.importance = self.importance.cycle();
     }
 }
 
@@ -206,7 +200,7 @@ struct MemTask {
 
 impl MemTask {
     fn cycle(&mut self) {
-        self.completion_level = self.completion_level.cycle()
+        self.completion_level = self.completion_level.cycle();
     }
 }
 

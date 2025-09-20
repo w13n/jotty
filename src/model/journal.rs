@@ -1,8 +1,7 @@
+pub(super) mod map_bujo;
+
 use anyhow::Result;
 use time::Date;
-
-mod map_bujo;
-pub use map_bujo::MapBujo;
 
 pub trait BuJo {
     fn new_event(&mut self, date: Date, index: usize) -> Result<()>;
@@ -49,7 +48,7 @@ pub enum Importance {
 }
 
 impl Importance {
-    pub fn cycle(&self) -> Self {
+    pub fn cycle(self) -> Self {
         match self {
             Importance::High => Importance::Normal,
             Importance::Normal => Importance::High,
@@ -66,7 +65,7 @@ pub enum CompletionLevel {
 }
 
 impl CompletionLevel {
-    pub fn cycle(&self) -> Self {
+    pub fn cycle(self) -> Self {
         match self {
             CompletionLevel::None => CompletionLevel::Partial,
             CompletionLevel::Partial => CompletionLevel::Full,

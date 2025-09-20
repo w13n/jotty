@@ -1,4 +1,7 @@
-use crate::journal::{BuJo, Event, Task};
+mod journal;
+
+pub use journal::{BuJo, CompletionLevel, Event, Importance, Task, map_bujo::MapBujo};
+
 use ratatui::widgets::ListState;
 use time::{Date, OffsetDateTime};
 
@@ -66,7 +69,7 @@ impl Model {
         if let Some(idx) = self.task_state.selected() {
             self.journal
                 .cycle_task(self.date, idx)
-                .expect("selected cannot be out of range")
+                .expect("selected cannot be out of range");
         } else if let Some(idx) = self.events_state.selected() {
             self.journal
                 .cycle_event(self.date, idx)
@@ -131,7 +134,7 @@ impl Model {
     }
 
     pub fn move_cursor_right(&mut self) {
-        if let Some(len) = self.get_editing_string().map(|x| x.len()) {
+        if let Some(len) = self.get_editing_string().map(str::len) {
             self.editing = self.editing.map(|x| if x < len { x + 1 } else { x });
         }
     }
@@ -143,7 +146,7 @@ impl Model {
                 .expect("editing has some")
                 .to_string();
             new_str.insert(idx, c);
-            self.update_editing_string(new_str);
+            self.update_editing_string(&new_str);
             self.editing = self.editing.map(|x| x + 1);
         }
     }
@@ -154,7 +157,7 @@ impl Model {
                 let mut new_str = str.to_string();
                 new_str.remove(editing - 1);
                 if editing > 0 {
-                    self.update_editing_string(new_str);
+                    self.update_editing_string(&new_str);
                     self.editing = self.editing.map(|x| x - 1);
                 }
             }
@@ -261,15 +264,15 @@ impl Model {
         None
     }
 
-    fn update_editing_string(&mut self, string: String) {
+    fn update_editing_string(&mut self, string: &str) {
         if let Some(row_idx) = self.events_state.selected() {
             self.journal
                 .update_event_title(self.date, row_idx, &string)
-                .expect("index cannot be out of bounds")
+                .expect("index cannot be out of bounds");
         } else if let Some(row_idx) = self.task_state.selected() {
             self.journal
                 .update_task_title(self.date, row_idx, &string)
-                .expect("index cannot be out of bounds")
+                .expect("index cannot be out of bounds");
         }
     }
 }
