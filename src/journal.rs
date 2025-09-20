@@ -1,175 +1,55 @@
-use anyhow::{Result, anyhow};
-use std::collections::HashMap;
+use anyhow::Result;
 use time::Date;
 
-#[derive(Default)]
-pub struct Journal(HashMap<Date, Entry>);
+mod map_bujo;
+pub use map_bujo::MapBujo;
 
-impl Journal {
-    pub fn new() -> Self {
-        Self(HashMap::new())
-    }
+pub trait BuJo {
+    fn new_event(&mut self, date: Date, index: usize) -> Result<()>;
+    fn new_task(&mut self, date: Date, index: usize) -> Result<()>;
 
-    pub fn new_entry(&mut self, date: Date) -> bool {
-        self.0.insert(date, Entry::new()).is_some()
-    }
+    fn delete_event(&mut self, date: Date, index: usize) -> Result<()>;
+    fn delete_task(&mut self, date: Date, index: usize) -> Result<()>;
 
-    pub fn new_event(&mut self, date: &Date, index: usize) -> Result<()> {
-        let events = &mut self
-            .0
-            .get_mut(date)
-            .ok_or(anyhow!("date does not exist in journal"))?
-            .events;
+    fn get_event(&mut self, date: Date, index: usize) -> Result<&dyn Event>;
+    fn get_task(&self, date: Date, index: usize) -> Result<&dyn Task>;
 
-        if events.len() < index {
-            return Err(anyhow!("index out of bounds"));
-        }
+    fn update_event_title(&mut self, date: Date, index: usize, title: &dyn ToString) -> Result<()>;
+    fn update_task_title(&mut self, date: Date, index: usize, title: &dyn ToString) -> Result<()>;
 
-        events.insert(index, Event::new());
-        Ok(())
-    }
+    fn cycle_event(&mut self, date: Date, index: usize) -> Result<()>;
+    fn cycle_task(&mut self, date: Date, index: usize) -> Result<()>;
 
-    pub fn new_task(&mut self, date: &Date, index: usize) -> Result<()> {
-        let tasks = &mut self
-            .0
-            .get_mut(date)
-            .ok_or(anyhow!("date does not exist in journal"))?
-            .tasks;
+    fn events_len(&self, date: Date) -> usize;
+    fn tasks_len(&self, date: Date) -> usize;
 
-        if tasks.len() < index {
-            return Err(anyhow!("index out of bounds"));
-        }
-
-        tasks.insert(index, Task::new());
-        Ok(())
-    }
-
-    pub fn delete_event(&mut self, date: &Date, index: usize) -> Result<()> {
-        let events = &mut self
-            .0
-            .get_mut(date)
-            .ok_or(anyhow!("date does not exist in journal"))?
-            .events;
-
-        if events.len() <= index {
-            return Err(anyhow!("index out of bounds"));
-        }
-
-        events.remove(index);
-        Ok(())
-    }
-
-    pub fn delete_task(&mut self, date: &Date, index: usize) -> Result<()> {
-        let tasks = &mut self
-            .0
-            .get_mut(date)
-            .ok_or(anyhow!("date does not exist in journal"))?
-            .tasks;
-
-        if tasks.len() <= index {
-            return Err(anyhow!("index out of bounds"));
-        }
-
-        tasks.remove(index);
-        Ok(())
-    }
-
-    pub fn delete_entry(&mut self, date: &Date) -> Result<()> {
-        if self.contains_day(date) {
-            self.0.remove(date);
-            return Ok(());
-        }
-        Err(anyhow!("entry does not exist"))
-    }
-
-    pub fn contains_day(&self, date: &Date) -> bool {
-        self.0.contains_key(date)
-    }
-
-    pub fn get_task(&mut self, date: &Date, index: usize) -> Option<&Task> {
-        if let Some(entry) = self.0.get(date) {
-            return entry.tasks.get(index);
-        }
-        None
-    }
-
-    pub fn get_task_mut(&mut self, date: &Date, index: usize) -> Option<&mut Task> {
-        if let Some(entry) = self.0.get_mut(date) {
-            return entry.tasks.get_mut(index);
-        }
-        None
-    }
-
-    pub fn get_event(&mut self, date: &Date, index: usize) -> Option<&Event> {
-        if let Some(entry) = self.0.get(date) {
-            return entry.events.get(index);
-        }
-        None
-    }
-
-    pub fn get_event_mut(&mut self, date: &Date, index: usize) -> Option<&mut Event> {
-        if let Some(entry) = self.0.get_mut(date) {
-            return entry.events.get_mut(index);
-        }
-        None
-    }
-
-    pub fn tasks_len(&self, date: &Date) -> Option<usize> {
-        self.0.get(date).map(|x| x.tasks.len())
-    }
-
-    pub fn events_len(&self, date: &Date) -> Option<usize> {
-        self.0.get(date).map(|x| x.events.len())
-    }
-
-    pub fn tasks_iter(&self, date: &Date) -> Option<std::slice::Iter<'_, Task>> {
-        self.0.get(date).map(|x| x.tasks.iter())
-    }
-
-    pub fn events_iter(&self, date: &Date) -> Option<std::slice::Iter<'_, Event>> {
-        self.0.get(date).map(|x| x.events.iter())
-    }
+    fn events_iter<'a>(
+        &'a self,
+        date: Date,
+    ) -> Box<dyn Iterator<Item = Box<&'a dyn Event<'a>>> + 'a>;
+    fn tasks_iter<'a>(&'a self, date: Date)
+    -> Box<dyn Iterator<Item = Box<&'a dyn Task<'a>>> + 'a>;
 }
 
-struct Entry {
-    events: Vec<Event>,
-    tasks: Vec<Task>,
+pub trait Task<'a> {
+    fn title(&'a self) -> &'a str;
+    fn completion_level(&self) -> CompletionLevel;
 }
 
-impl Entry {
-    pub fn new() -> Self {
-        Self {
-            events: Vec::new(),
-            tasks: Vec::new(),
-        }
-    }
+pub trait Event<'a> {
+    fn title(&'a self) -> &'a str;
+    fn importance(&self) -> Importance;
 }
 
-pub struct Event {
-    pub title: String,
-    pub importance: Importance,
-}
-
-impl Event {
-    pub fn new() -> Self {
-        Self {
-            title: String::new(),
-            importance: Importance::Normal,
-        }
-    }
-
-    pub fn cycle(&mut self) {
-        self.importance = self.importance.cycle();
-    }
-}
-
+#[derive(Copy, Clone, Default)]
 pub enum Importance {
+    #[default]
     Normal,
     High,
 }
 
 impl Importance {
-    fn cycle(&self) -> Self {
+    pub fn cycle(&self) -> Self {
         match self {
             Importance::High => Importance::Normal,
             Importance::Normal => Importance::High,
@@ -177,32 +57,16 @@ impl Importance {
     }
 }
 
-pub struct Task {
-    pub title: String,
-    pub completion_level: CompletionLevel,
-}
-
-impl Task {
-    pub fn new() -> Self {
-        Self {
-            title: String::new(),
-            completion_level: CompletionLevel::None,
-        }
-    }
-
-    pub fn cycle(&mut self) {
-        self.completion_level = self.completion_level.cycle();
-    }
-}
-
+#[derive(Copy, Clone, Default)]
 pub enum CompletionLevel {
+    #[default]
     None,
     Partial,
     Full,
 }
 
 impl CompletionLevel {
-    fn cycle(&self) -> Self {
+    pub fn cycle(&self) -> Self {
         match self {
             CompletionLevel::None => CompletionLevel::Partial,
             CompletionLevel::Partial => CompletionLevel::Full,
