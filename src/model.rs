@@ -1,4 +1,5 @@
 mod mem_model;
+mod sqlite_model;
 
 pub use mem_model::MemModel;
 
