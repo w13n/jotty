@@ -1,11 +1,10 @@
 use std::{
     cell::{Cell, RefCell},
     i64,
-    rc::Rc,
 };
 
 use anyhow::anyhow;
-use diesel::{prelude::*, sql_types::BigInt};
+use diesel::prelude::*;
 use time::Date;
 
 use super::Importance;
