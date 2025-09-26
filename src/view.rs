@@ -80,7 +80,7 @@ impl View {
                 let events_widget = self
                     .model
                     .events_iter(self.date)
-                    .map(|x| ListItem::new(format_events(*x)))
+                    .map(|x| ListItem::new(format_events(x)))
                     .collect::<List>()
                     .block(events_block)
                     .highlight_style(Style::new().fg(Color::Red));
@@ -92,7 +92,7 @@ impl View {
                 let task_widget = self
                     .model
                     .tasks_iter(self.date)
-                    .map(|x| ListItem::new(format_tasks(*x)))
+                    .map(|x| ListItem::new(format_tasks(x)))
                     .collect::<List>()
                     .block(task_block)
                     .highlight_style(Style::new().fg(Color::Yellow));
@@ -161,13 +161,23 @@ impl View {
     pub fn cycle(&mut self) {
         self.editing = None;
         if let Some(idx) = self.task_state.selected() {
+            let cycled_task = self
+                .model
+                .get_task(self.date, idx)
+                .expect("selected cannot be out of bounds")
+                .cycle();
             self.model
-                .cycle_task(self.date, idx)
-                .expect("selected cannot be out of range");
+                .replace_task(self.date, idx, cycled_task)
+                .expect("selected cannot be out of bounds");
         } else if let Some(idx) = self.events_state.selected() {
+            let cycled_event = self
+                .model
+                .get_event(self.date, idx)
+                .expect("selected cannot be out of bounds")
+                .cycle();
             self.model
-                .cycle_event(self.date, idx)
-                .expect("selected cannot be out of range");
+                .replace_event(self.date, idx, cycled_event)
+                .expect("selected cannot be out of bounds");
         }
     }
 
@@ -228,7 +238,7 @@ impl View {
     }
 
     pub fn move_cursor_right(&mut self) {
-        if let Some(len) = self.get_editing_string().map(str::len) {
+        if let Some(len) = self.get_editing_string().map(|x| x.len()) {
             self.editing = self.editing.map(|x| if x < len { x + 1 } else { x });
         }
     }
@@ -240,20 +250,20 @@ impl View {
                 .expect("editing has some")
                 .to_string();
             new_str.insert(idx, c);
-            self.update_editing_string(&new_str);
+            self.update_editing_string(new_str);
             self.editing = self.editing.map(|x| x + 1);
         }
     }
 
     pub fn delete_char(&mut self) {
-        if let Some(editing) = self.editing {
-            if let Some(str) = self.get_editing_string() {
-                let mut new_str = str.to_string();
-                new_str.remove(editing - 1);
-                if editing > 0 {
-                    self.update_editing_string(&new_str);
-                    self.editing = self.editing.map(|x| x - 1);
-                }
+        if let Some(editing) = self.editing
+            && let Some(str) = self.get_editing_string()
+        {
+            let mut new_str = str.to_string();
+            new_str.remove(editing - 1);
+            if editing > 0 {
+                self.update_editing_string(new_str);
+                self.editing = self.editing.map(|x| x - 1);
             }
         }
     }
@@ -321,55 +331,65 @@ impl View {
         self.editing.is_some()
     }
 
-    fn get_editing_string(&mut self) -> Option<&str> {
+    fn get_editing_string(&mut self) -> Option<String> {
         if let Some(row_idx) = self.events_state.selected() {
             return Some(
                 self.model
                     .get_event(self.date, row_idx)
                     .expect("selected cannot be out of range")
-                    .title(),
+                    .title,
             );
         } else if let Some(row_idx) = self.task_state.selected() {
             return Some(
                 self.model
                     .get_task(self.date, row_idx)
                     .expect("selected cannot be out of range")
-                    .title(),
+                    .title,
             );
         }
         None
     }
 
-    fn update_editing_string(&mut self, string: &str) {
-        if let Some(row_idx) = self.events_state.selected() {
+    fn update_editing_string(&mut self, string: String) {
+        if let Some(idx) = self.task_state.selected() {
+            let mut new_task = self
+                .model
+                .get_task(self.date, idx)
+                .expect("selected cannot be out of bounds");
+            new_task.title = string;
             self.model
-                .update_event_title(self.date, row_idx, &string)
-                .expect("index cannot be out of bounds");
-        } else if let Some(row_idx) = self.task_state.selected() {
+                .replace_task(self.date, idx, new_task)
+                .expect("selected cannot be out of bounds");
+        } else if let Some(idx) = self.events_state.selected() {
+            let mut new_event = self
+                .model
+                .get_event(self.date, idx)
+                .expect("selected cannot be out of bounds");
+            new_event.title = string;
             self.model
-                .update_task_title(self.date, row_idx, &string)
-                .expect("index cannot be out of bounds");
+                .replace_event(self.date, idx, new_event)
+                .expect("selected cannot be out of bounds");
         }
     }
 }
 
-fn format_tasks<'a>(task: &'a (dyn Task<'a> + 'a)) -> String {
-    match task.completion_level() {
+fn format_tasks(task: Task) -> String {
+    match task.completion_level {
         CompletionLevel::None => {
-            format!(" ○ {}", &task.title())
+            format!(" ○ {}", task.title)
         }
         CompletionLevel::Partial => {
-            format!(" ◐ {}", &task.title())
+            format!(" ◐ {}", task.title)
         }
         CompletionLevel::Full => {
-            format!(" ● {}", &task.title())
+            format!(" ● {}", task.title)
         }
     }
 }
 
-fn format_events<'a>(event: &'a (dyn Event<'a> + 'a)) -> Span<'static> {
-    match event.importance() {
-        Importance::Normal => Span::from(event.title().to_owned()),
-        Importance::High => event.title().to_owned().clone().bold(),
+fn format_events(event: Event) -> Span<'static> {
+    match event.importance {
+        Importance::Normal => Span::from(event.title),
+        Importance::High => event.title.bold(),
     }
 }

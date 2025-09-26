@@ -1,5 +1,5 @@
 mod mem_model;
-mod sqlite_model;
+// mod sqlite_model;
 
 pub use mem_model::MemModel;
 
@@ -13,37 +13,50 @@ pub trait Model {
     fn delete_event(&mut self, date: Date, index: usize) -> Result<()>;
     fn delete_task(&mut self, date: Date, index: usize) -> Result<()>;
 
-    fn get_event(&mut self, date: Date, index: usize) -> Result<&dyn Event>;
-    fn get_task(&self, date: Date, index: usize) -> Result<&dyn Task>;
+    fn get_event(&mut self, date: Date, index: usize) -> Result<Event>;
+    fn get_task(&self, date: Date, index: usize) -> Result<Task>;
 
-    fn update_event_title(&mut self, date: Date, index: usize, title: &dyn ToString) -> Result<()>;
-    fn update_task_title(&mut self, date: Date, index: usize, title: &dyn ToString) -> Result<()>;
-
-    fn cycle_event(&mut self, date: Date, index: usize) -> Result<()>;
-    fn cycle_task(&mut self, date: Date, index: usize) -> Result<()>;
+    fn replace_event(&mut self, date: Date, index: usize, event: Event) -> Result<()>;
+    fn replace_task(&mut self, date: Date, index: usize, task: Task) -> Result<()>;
 
     fn events_len(&self, date: Date) -> usize;
     fn tasks_len(&self, date: Date) -> usize;
 
-    fn events_iter<'a>(
-        &'a self,
-        date: Date,
-    ) -> Box<dyn Iterator<Item = Box<&'a dyn Event<'a>>> + 'a>;
-    fn tasks_iter<'a>(&'a self, date: Date)
-    -> Box<dyn Iterator<Item = Box<&'a dyn Task<'a>>> + 'a>;
+    fn events_iter<'a>(&'a self, date: Date) -> Box<dyn Iterator<Item = Event> + 'a>;
+    fn tasks_iter<'a>(&'a self, date: Date) -> Box<dyn Iterator<Item = Task> + 'a>;
 }
 
-pub trait Task<'a> {
-    fn title(&'a self) -> &'a str;
-    fn completion_level(&self) -> CompletionLevel;
+#[derive(Default, Debug, Hash, Clone)]
+pub struct Task {
+    pub title: String,
+    pub completion_level: CompletionLevel,
 }
 
-pub trait Event<'a> {
-    fn title(&'a self) -> &'a str;
-    fn importance(&self) -> Importance;
+impl Task {
+    pub fn cycle(self) -> Self {
+        Self {
+            title: self.title,
+            completion_level: self.completion_level.cycle(),
+        }
+    }
 }
 
-#[derive(Copy, Clone, Default)]
+#[derive(Default, Debug, Hash, Clone)]
+pub struct Event {
+    pub title: String,
+    pub importance: Importance,
+}
+
+impl Event {
+    pub fn cycle(self) -> Self {
+        Self {
+            title: self.title,
+            importance: self.importance.cycle(),
+        }
+    }
+}
+
+#[derive(Default, Debug, Hash, Clone)]
 pub enum Importance {
     #[default]
     Normal,
@@ -59,7 +72,7 @@ impl Importance {
     }
 }
 
-#[derive(Copy, Clone, Default)]
+#[derive(Default, Debug, Hash, Clone)]
 pub enum CompletionLevel {
     #[default]
     None,
