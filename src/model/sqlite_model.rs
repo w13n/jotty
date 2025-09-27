@@ -1,25 +1,25 @@
 use std::{
     cell::{Cell, RefCell},
-    i64,
+    iter,
 };
 
-use anyhow::anyhow;
+use anyhow::{Result, anyhow};
 use diesel::prelude::*;
 use time::Date;
 
 use super::Importance;
 use crate::model::{CompletionLevel, Event, Model, Task};
 
-struct SqliteModel(RefCell<SqliteConnection>, Cell<bool>);
+pub struct SqliteModel(RefCell<SqliteConnection>, Cell<bool>);
 
 impl SqliteModel {
-    fn new(sqlite_connection: SqliteConnection) -> Self {
+    pub fn new(sqlite_connection: SqliteConnection) -> Self {
         Self(RefCell::new(sqlite_connection), Cell::new(false))
     }
 }
 
 impl Model for SqliteModel {
-    fn new_event(&mut self, d: Date, i: usize) -> anyhow::Result<()> {
+    fn new_event(&mut self, d: Date, i: usize) -> Result<()> {
         use tables::events::dsl::*;
 
         let julian_date = d.to_julian_day();
@@ -52,11 +52,11 @@ impl Model for SqliteModel {
         Ok(())
     }
 
-    fn new_task(&mut self, d: Date, i: usize) -> anyhow::Result<()> {
+    fn new_task(&mut self, d: Date, i: usize) -> Result<()> {
         use tables::tasks::dsl::*;
 
         let julian_date = d.to_julian_day();
-        let len = self.events_len(d);
+        let len = self.tasks_len(d);
 
         if i <= len {
             diesel::update(tasks)
@@ -86,7 +86,7 @@ impl Model for SqliteModel {
         }
     }
 
-    fn delete_event(&mut self, d: Date, i: usize) -> anyhow::Result<()> {
+    fn delete_event(&mut self, d: Date, i: usize) -> Result<()> {
         use tables::events::dsl::*;
 
         let julian_date = d.to_julian_day();
@@ -115,7 +115,7 @@ impl Model for SqliteModel {
         }
     }
 
-    fn delete_task(&mut self, d: Date, i: usize) -> anyhow::Result<()> {
+    fn delete_task(&mut self, d: Date, i: usize) -> Result<()> {
         use tables::tasks::dsl::*;
 
         let julian_date = d.to_julian_day();
@@ -144,7 +144,7 @@ impl Model for SqliteModel {
         }
     }
 
-    fn get_event(&mut self, d: Date, i: usize) -> anyhow::Result<&dyn Event> {
+    fn get_event(&self, d: Date, i: usize) -> Result<Event> {
         use tables::events::dsl::*;
 
         let julian_date = d.to_julian_day();
@@ -154,12 +154,89 @@ impl Model for SqliteModel {
             let elem = events
                 .filter(date.eq(julian_date).and(index.eq(i as i32)))
                 .select(SQLEvent::as_select())
-                .first(self.0.get_mut())
+                .first(&mut *self.0.borrow_mut())
                 .unwrap_or_else(|_| {
                     self.1.set(true);
                     SQLEvent::new(julian_date, i as i32)
                 });
-            Ok(elem)
+            Ok(elem.to())
+        } else {
+            Err(anyhow!("index out of bounds"))
+        }
+    }
+
+    fn get_task(&self, d: Date, i: usize) -> Result<Task> {
+        use tables::tasks::dsl::*;
+
+        let julian_date = d.to_julian_day();
+        let len = self.tasks_len(d);
+
+        if i < len {
+            let elem = tasks
+                .filter(date.eq(julian_date).and(index.eq(i as i32)))
+                .select(SQLTask::as_select())
+                .first(&mut *self.0.borrow_mut())
+                .unwrap_or_else(|_| {
+                    self.1.set(true);
+                    SQLTask::new(julian_date, i as i32)
+                });
+            Ok(elem.to())
+        } else {
+            Err(anyhow!("index out of bounds"))
+        }
+    }
+
+    fn replace_event(&mut self, d: Date, i: usize, e: Event) -> Result<()> {
+        use tables::events::dsl::*;
+        let event = SQLEvent::from(e, d, i);
+        let julian_date = d.to_julian_day();
+        let len = self.events_len(d);
+
+        if i < len {
+            diesel::delete(events)
+                .filter(date.eq(julian_date).and(index.eq(i as i32)))
+                .execute(self.0.get_mut())
+                .unwrap_or_else(|_| {
+                    self.1.set(true);
+                    0
+                });
+
+            diesel::insert_into(events)
+                .values(&event)
+                .execute(self.0.get_mut())
+                .unwrap_or_else(|_| {
+                    self.1.set(true);
+                    0
+                });
+            Ok(())
+        } else {
+            Err(anyhow!("index out of bounds"))
+        }
+    }
+
+    fn replace_task(&mut self, d: Date, i: usize, t: Task) -> Result<()> {
+        use tables::tasks::dsl::*;
+        let task = SQLTask::from(t, d, i);
+        let julian_date = d.to_julian_day();
+        let len = self.events_len(d);
+
+        if i < len {
+            diesel::delete(tasks)
+                .filter(date.eq(julian_date).and(index.eq(i as i32)))
+                .execute(self.0.get_mut())
+                .unwrap_or_else(|_| {
+                    self.1.set(true);
+                    0
+                });
+
+            diesel::insert_into(tasks)
+                .values(&task)
+                .execute(self.0.get_mut())
+                .unwrap_or_else(|_| {
+                    self.1.set(true);
+                    0
+                });
+            Ok(())
         } else {
             Err(anyhow!("index out of bounds"))
         }
@@ -194,6 +271,40 @@ impl Model for SqliteModel {
         self.1.set(true);
         0
     }
+
+    fn events_iter<'a>(&'a self, d: Date) -> Box<dyn Iterator<Item = Event> + 'a> {
+        use tables::events::dsl::*;
+        events
+            .filter(date.eq(d.to_julian_day()))
+            .select(SQLEvent::as_select())
+            .order(index.asc())
+            .load(&mut *self.0.borrow_mut())
+            .map(|vec| {
+                Box::new(vec.into_iter().map(|elem| elem.to()))
+                    as Box<dyn Iterator<Item = Event> + 'a>
+            })
+            .unwrap_or_else(|_| {
+                self.1.set(true);
+                Box::new(iter::empty())
+            })
+    }
+
+    fn tasks_iter<'a>(&'a self, d: Date) -> Box<dyn Iterator<Item = Task> + 'a> {
+        use tables::tasks::dsl::*;
+        tasks
+            .filter(date.eq(d.to_julian_day()))
+            .select(SQLTask::as_select())
+            .order(index.asc())
+            .load(&mut *self.0.borrow_mut())
+            .map(|vec| {
+                Box::new(vec.into_iter().map(|elem| elem.to()))
+                    as Box<dyn Iterator<Item = Task> + 'a>
+            })
+            .unwrap_or_else(|_| {
+                self.1.set(true);
+                Box::new(iter::empty())
+            })
+    }
 }
 
 #[derive(Queryable, Selectable, Insertable)]
@@ -215,18 +326,29 @@ impl SQLEvent {
             importance: 0,
         }
     }
-}
 
-impl<'a> Event<'a> for SQLEvent {
-    fn title(&'a self) -> &'a str {
-        self.title.as_str()
+    fn to(self) -> Event {
+        Event {
+            title: self.title,
+            importance: match self.importance {
+                0 => Importance::Normal,
+                1 => Importance::High,
+                _ => panic!("db out of sync"),
+            },
+        }
     }
 
-    fn importance(&self) -> Importance {
-        match self.importance {
-            0 => Importance::Normal,
-            1 => Importance::High,
-            _ => panic!("database corrupted"),
+    fn from(e: Event, d: Date, i: usize) -> Self {
+        let importance = match e.importance {
+            Importance::Normal => 0,
+            Importance::High => 1,
+        };
+
+        Self {
+            title: e.title,
+            importance,
+            date: d.to_julian_day(),
+            index: i as i32,
         }
     }
 }
@@ -250,19 +372,31 @@ impl SQLTask {
             completion_level: 0,
         }
     }
-}
 
-impl<'a> Task<'a> for SQLTask {
-    fn title(&'a self) -> &'a str {
-        self.title.as_str()
+    fn to(self) -> Task {
+        Task {
+            title: self.title,
+            completion_level: match self.completion_level {
+                0 => CompletionLevel::None,
+                1 => CompletionLevel::Partial,
+                2 => CompletionLevel::Full,
+                _ => panic!("db out of sync"),
+            },
+        }
     }
 
-    fn completion_level(&self) -> CompletionLevel {
-        match self.completion_level {
-            0 => CompletionLevel::None,
-            1 => CompletionLevel::Partial,
-            2 => CompletionLevel::Full,
-            _ => panic!("database corrupted"),
+    fn from(e: Task, d: Date, i: usize) -> Self {
+        let completion_level = match e.completion_level {
+            CompletionLevel::None => 0,
+            CompletionLevel::Partial => 1,
+            CompletionLevel::Full => 2,
+        };
+
+        Self {
+            title: e.title,
+            completion_level,
+            date: d.to_julian_day(),
+            index: i as i32,
         }
     }
 }

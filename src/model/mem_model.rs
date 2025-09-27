@@ -53,7 +53,7 @@ impl Model for MemModel {
         Err(anyhow!("index out of bounds"))
     }
 
-    fn get_event(&mut self, date: Date, index: usize) -> Result<Event> {
+    fn get_event(&self, date: Date, index: usize) -> Result<Event> {
         if let Some(entry) = self.0.get(&date)
             && index < entry.events.len()
         {

@@ -1,7 +1,8 @@
 mod mem_model;
-// mod sqlite_model;
+mod sqlite_model;
 
 pub use mem_model::MemModel;
+pub use sqlite_model::SqliteModel;
 
 use anyhow::Result;
 use time::Date;
@@ -13,7 +14,7 @@ pub trait Model {
     fn delete_event(&mut self, date: Date, index: usize) -> Result<()>;
     fn delete_task(&mut self, date: Date, index: usize) -> Result<()>;
 
-    fn get_event(&mut self, date: Date, index: usize) -> Result<Event>;
+    fn get_event(&self, date: Date, index: usize) -> Result<Event>;
     fn get_task(&self, date: Date, index: usize) -> Result<Task>;
 
     fn replace_event(&mut self, date: Date, index: usize, event: Event) -> Result<()>;
