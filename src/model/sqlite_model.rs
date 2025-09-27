@@ -119,7 +119,7 @@ impl Model for SqliteModel {
         use tables::tasks::dsl::*;
 
         let julian_date = d.to_julian_day();
-        let len = self.events_len(d);
+        let len = self.tasks_len(d);
 
         if i < len {
             diesel::delete(tasks)
@@ -218,7 +218,7 @@ impl Model for SqliteModel {
         use tables::tasks::dsl::*;
         let task = SQLTask::from(t, d, i);
         let julian_date = d.to_julian_day();
-        let len = self.events_len(d);
+        let len = self.tasks_len(d);
 
         if i < len {
             diesel::delete(tasks)
