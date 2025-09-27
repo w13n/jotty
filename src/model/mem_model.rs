@@ -124,6 +124,10 @@ impl Model for MemModel {
             Box::new(x.tasks.iter().cloned()) as Box<dyn Iterator<Item = Task> + 'a>
         })
     }
+
+    fn err(&self) -> Result<()> {
+        Ok(())
+    }
 }
 
 #[derive(Default)]

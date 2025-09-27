@@ -1,5 +1,6 @@
 use std::io::Result;
 
+use anyhow::Error;
 use ratatui::DefaultTerminal;
 use ratatui::layout::Position;
 use ratatui::prelude::Color;
@@ -12,7 +13,7 @@ use ratatui::{
     style::Stylize,
     symbols::border,
     text::Line,
-    widgets::{Block, List, Paragraph},
+    widgets::{Block, List, Paragraph, Wrap},
 };
 use time::{Date, OffsetDateTime};
 
@@ -45,6 +46,14 @@ impl View {
     }
 
     pub fn render(&mut self) -> Result<()> {
+        if let Err(e) = self.model.err() {
+            self.render_err(e)
+        } else {
+            self.render_default()
+        }
+    }
+
+    fn render_default(&mut self) -> Result<()> {
         self.terminal.draw(|frame| {
             let [_top, middle, _bottom] =
                 Layout::vertical([Constraint::Max(1), Constraint::Min(1), Constraint::Max(1)])
@@ -124,210 +133,268 @@ impl View {
         Ok(())
     }
 
+    fn render_err(&mut self, err: Error) -> Result<()> {
+        self.terminal.draw(|frame| {
+            let title = Line::from(" Jotty Error ".red().bold());
+            let container_block = Block::new()
+                .title(title.centered())
+                .border_set(border::ROUNDED);
+
+            let container = Paragraph::new(err.to_string())
+                .centered()
+                .block(container_block)
+                .wrap(Wrap { trim: true });
+
+            frame.render_widget(container, frame.area());
+        })?;
+        Ok(())
+    }
+
     pub fn move_up(&mut self) {
-        self.editing = None;
-        if self.events_state.selected().is_some() {
-            self.events_state.select_previous();
-        } else if self.task_state.selected().is_some() {
-            self.task_state.select_previous();
+        if self.model.err().is_ok() {
+            self.editing = None;
+            if self.events_state.selected().is_some() {
+                self.events_state.select_previous();
+            } else if self.task_state.selected().is_some() {
+                self.task_state.select_previous();
+            }
         }
     }
 
     pub fn move_down(&mut self) {
-        self.editing = None;
-        if self.events_state.selected().is_some() {
-            self.events_state.select_next();
-        } else if self.task_state.selected().is_some() {
-            self.task_state.select_next();
+        if self.model.err().is_ok() {
+            self.editing = None;
+            if self.events_state.selected().is_some() {
+                self.events_state.select_next();
+            } else if self.task_state.selected().is_some() {
+                self.task_state.select_next();
+            }
         }
     }
 
     pub fn move_left(&mut self) {
-        self.editing = None;
-        if self.task_state.selected().is_some() && self.model.events_len(self.date) > 0 {
-            self.events_state.select(self.task_state.selected());
-            self.task_state.select(None);
+        if self.model.err().is_ok() {
+            self.editing = None;
+            if self.task_state.selected().is_some() && self.model.events_len(self.date) > 0 {
+                self.events_state.select(self.task_state.selected());
+                self.task_state.select(None);
+            }
         }
     }
 
     pub fn move_right(&mut self) {
-        self.editing = None;
-        if self.events_state.selected().is_some() && self.model.tasks_len(self.date) > 0 {
-            self.task_state.select(self.events_state.selected());
-            self.events_state.select(None);
+        if self.model.err().is_ok() {
+            self.editing = None;
+            if self.events_state.selected().is_some() && self.model.tasks_len(self.date) > 0 {
+                self.task_state.select(self.events_state.selected());
+                self.events_state.select(None);
+            }
         }
     }
 
     pub fn cycle(&mut self) {
-        self.editing = None;
-        if let Some(idx) = self.task_state.selected() {
-            let cycled_task = self
-                .model
-                .get_task(self.date, idx)
-                .expect("selected cannot be out of bounds")
-                .cycle();
-            self.model
-                .replace_task(self.date, idx, cycled_task)
-                .expect("selected cannot be out of bounds");
-        } else if let Some(idx) = self.events_state.selected() {
-            let cycled_event = self
-                .model
-                .get_event(self.date, idx)
-                .expect("selected cannot be out of bounds")
-                .cycle();
-            self.model
-                .replace_event(self.date, idx, cycled_event)
-                .expect("selected cannot be out of bounds");
+        if self.model.err().is_ok() {
+            self.editing = None;
+            if let Some(idx) = self.task_state.selected() {
+                let cycled_task = self
+                    .model
+                    .get_task(self.date, idx)
+                    .expect("selected cannot be out of bounds")
+                    .cycle();
+                self.model
+                    .replace_task(self.date, idx, cycled_task)
+                    .expect("selected cannot be out of bounds");
+            } else if let Some(idx) = self.events_state.selected() {
+                let cycled_event = self
+                    .model
+                    .get_event(self.date, idx)
+                    .expect("selected cannot be out of bounds")
+                    .cycle();
+                self.model
+                    .replace_event(self.date, idx, cycled_event)
+                    .expect("selected cannot be out of bounds");
+            }
         }
     }
 
     pub fn move_to_next(&mut self) {
-        self.move_to(self.date.next_day().expect("we will never reach max date"));
+        if self.model.err().is_ok() {
+            self.move_to(self.date.next_day().expect("we will never reach max date"));
+        }
     }
 
     pub fn move_to_prev(&mut self) {
-        self.move_to(
-            self.date
-                .previous_day()
-                .expect("we will never reach minimum date"),
-        );
+        if self.model.err().is_ok() {
+            self.move_to(
+                self.date
+                    .previous_day()
+                    .expect("we will never reach minimum date"),
+            );
+        }
     }
 
     pub fn move_to_today(&mut self) {
-        self.move_to(
-            OffsetDateTime::now_local()
-                .unwrap_or(OffsetDateTime::now_utc())
-                .date(),
-        );
+        if self.model.err().is_ok() {
+            self.move_to(
+                OffsetDateTime::now_local()
+                    .unwrap_or(OffsetDateTime::now_utc())
+                    .date(),
+            );
+        }
     }
 
     fn move_to(&mut self, date: Date) {
-        self.editing = None;
-        self.date = date;
-        if self.task_state.selected().is_some() && self.model.tasks_len(date) == 0 {
-            if self.model.events_len(date) > 0 {
-                self.events_state.select(self.task_state.selected());
-            }
-            self.task_state.select(None);
-        } else if self.events_state.selected().is_some() && self.model.events_len(date) == 0 {
-            if self.model.tasks_len(date) > 0 {
-                self.task_state.select(self.events_state.selected());
-            }
-            self.events_state.select(None);
-        } else if self.task_state.selected().is_none() && self.task_state.selected().is_none() {
-            if self.model.events_len(date) > 0 {
-                self.events_state.select(Some(0));
-            } else if self.model.tasks_len(date) > 0 {
-                self.task_state.select(Some(0));
+        if self.model.err().is_ok() {
+            self.editing = None;
+            self.date = date;
+            if self.task_state.selected().is_some() && self.model.tasks_len(date) == 0 {
+                if self.model.events_len(date) > 0 {
+                    self.events_state.select(self.task_state.selected());
+                }
+                self.task_state.select(None);
+            } else if self.events_state.selected().is_some() && self.model.events_len(date) == 0 {
+                if self.model.tasks_len(date) > 0 {
+                    self.task_state.select(self.events_state.selected());
+                }
+                self.events_state.select(None);
+            } else if self.task_state.selected().is_none() && self.task_state.selected().is_none() {
+                if self.model.events_len(date) > 0 {
+                    self.events_state.select(Some(0));
+                } else if self.model.tasks_len(date) > 0 {
+                    self.task_state.select(Some(0));
+                }
             }
         }
     }
 
     pub fn enter_editing_mode(&mut self) {
-        if let Some(editing_str) = self.get_editing_string() {
-            self.editing = Some(editing_str.len());
+        if self.model.err().is_ok() {
+            if let Some(editing_str) = self.get_editing_string() {
+                self.editing = Some(editing_str.len());
+            }
         }
     }
 
     pub fn exit_editing_mode(&mut self) {
-        self.editing = None;
+        if self.model.err().is_ok() {
+            self.editing = None;
+        }
     }
 
     pub fn move_cursor_left(&mut self) {
-        self.editing = self.editing.map(|x| if x > 0 { x - 1 } else { x });
+        if self.model.err().is_ok() {
+            self.editing = self.editing.map(|x| if x > 0 { x - 1 } else { x });
+        }
     }
 
     pub fn move_cursor_right(&mut self) {
-        if let Some(len) = self.get_editing_string().map(|x| x.len()) {
-            self.editing = self.editing.map(|x| if x < len { x + 1 } else { x });
+        if self.model.err().is_ok() {
+            if let Some(len) = self.get_editing_string().map(|x| x.len()) {
+                self.editing = self.editing.map(|x| if x < len { x + 1 } else { x });
+            }
         }
     }
 
     pub fn insert_char(&mut self, c: char) {
-        if let Some(idx) = self.editing {
-            let mut new_str = self
-                .get_editing_string()
-                .expect("editing has some")
-                .to_string();
-            new_str.insert(idx, c);
-            self.update_editing_string(new_str);
-            self.editing = self.editing.map(|x| x + 1);
+        if self.model.err().is_ok() {
+            if let Some(idx) = self.editing {
+                let mut new_str = self
+                    .get_editing_string()
+                    .expect("editing has some")
+                    .to_string();
+                new_str.insert(idx, c);
+                self.update_editing_string(new_str);
+                self.editing = self.editing.map(|x| x + 1);
+            }
         }
     }
 
     pub fn delete_char(&mut self) {
-        if let Some(editing) = self.editing
-            && let Some(str) = self.get_editing_string()
-        {
-            let mut new_str = str.to_string();
-            new_str.remove(editing - 1);
-            if editing > 0 {
-                self.update_editing_string(new_str);
-                self.editing = self.editing.map(|x| x - 1);
+        if self.model.err().is_ok() {
+            if let Some(editing) = self.editing
+                && let Some(str) = self.get_editing_string()
+            {
+                let mut new_str = str.to_string();
+                new_str.remove(editing - 1);
+                if editing > 0 {
+                    self.update_editing_string(new_str);
+                    self.editing = self.editing.map(|x| x - 1);
+                }
             }
         }
     }
 
     pub fn append_new_event(&mut self) {
-        let idx = self.model.events_len(self.date);
-        self.model
-            .new_event(self.date, idx)
-            .expect("idx was set based on length");
-        self.events_state.selected_mut().replace(idx);
-        self.task_state.selected_mut().take();
-        self.editing = Some(0);
-    }
-
-    pub fn append_new_task(&mut self) {
-        let idx = self.model.tasks_len(self.date);
-        self.model
-            .new_task(self.date, idx)
-            .expect("idx was set based on length");
-        self.task_state.selected_mut().replace(idx);
-        self.events_state.selected_mut().take();
-        self.editing = Some(0);
-    }
-
-    pub fn insert_new_item(&mut self) {
-        if let Some(idx) = self.events_state.selected() {
+        if self.model.err().is_ok() {
+            let idx = self.model.events_len(self.date);
             self.model
                 .new_event(self.date, idx)
-                .expect("idx was set based on selected");
-            self.editing = Some(0);
-        } else if let Some(idx) = self.task_state.selected() {
-            self.model
-                .new_task(self.date, idx)
-                .expect("idx was set based on selected");
+                .expect("idx was set based on length");
+            self.events_state.selected_mut().replace(idx);
+            self.task_state.selected_mut().take();
             self.editing = Some(0);
         }
     }
 
-    pub fn delete(&mut self) {
-        self.editing = None;
-        if let Some(idx) = self.events_state.selected() {
+    pub fn append_new_task(&mut self) {
+        if self.model.err().is_ok() {
+            let idx = self.model.tasks_len(self.date);
             self.model
-                .delete_event(self.date, idx)
-                .expect("the item is selected");
-            if self.model.events_len(self.date) == 0 {
-                self.events_state.select(None);
-                if self.model.tasks_len(self.date) > 0 {
-                    self.task_state.select(Some(idx));
-                }
+                .new_task(self.date, idx)
+                .expect("idx was set based on length");
+            self.task_state.selected_mut().replace(idx);
+            self.events_state.selected_mut().take();
+            self.editing = Some(0);
+        }
+    }
+
+    pub fn insert_new_item(&mut self) {
+        if self.model.err().is_ok() {
+            if let Some(idx) = self.events_state.selected() {
+                self.model
+                    .new_event(self.date, idx)
+                    .expect("idx was set based on selected");
+                self.editing = Some(0);
+            } else if let Some(idx) = self.task_state.selected() {
+                self.model
+                    .new_task(self.date, idx)
+                    .expect("idx was set based on selected");
+                self.editing = Some(0);
             }
-        } else if let Some(idx) = self.task_state.selected() {
-            self.model
-                .delete_task(self.date, idx)
-                .expect("the item is selected");
-            if self.model.tasks_len(self.date) == 0 {
-                self.task_state.select(None);
-                if self.model.events_len(self.date) > 0 {
-                    self.events_state.select(Some(idx));
+        }
+    }
+
+    pub fn delete(&mut self) {
+        if self.model.err().is_ok() {
+            self.editing = None;
+            if let Some(idx) = self.events_state.selected() {
+                self.model
+                    .delete_event(self.date, idx)
+                    .expect("the item is selected");
+                if self.model.events_len(self.date) == 0 {
+                    self.events_state.select(None);
+                    if self.model.tasks_len(self.date) > 0 {
+                        self.task_state.select(Some(idx));
+                    }
+                }
+            } else if let Some(idx) = self.task_state.selected() {
+                self.model
+                    .delete_task(self.date, idx)
+                    .expect("the item is selected");
+                if self.model.tasks_len(self.date) == 0 {
+                    self.task_state.select(None);
+                    if self.model.events_len(self.date) > 0 {
+                        self.events_state.select(Some(idx));
+                    }
                 }
             }
         }
     }
 
     pub fn is_editing(&self) -> bool {
+        if self.model.err().is_err() {
+            return false;
+        }
         self.editing.is_some()
     }
 

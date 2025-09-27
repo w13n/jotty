@@ -305,6 +305,15 @@ impl Model for SqliteModel {
                 Box::new(iter::empty())
             })
     }
+
+    fn err(&self) -> Result<()> {
+        if self.1.get() {
+            return Err(anyhow!(
+                "The database has encountered an unrecoverable error. This can occur when the database is deleted or the permissions are changed while this program is running. You must quit the app now."
+            ));
+        }
+        Ok(())
+    }
 }
 
 #[derive(Queryable, Selectable, Insertable)]

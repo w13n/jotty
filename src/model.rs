@@ -25,6 +25,8 @@ pub trait Model {
 
     fn events_iter<'a>(&'a self, date: Date) -> Box<dyn Iterator<Item = Event> + 'a>;
     fn tasks_iter<'a>(&'a self, date: Date) -> Box<dyn Iterator<Item = Task> + 'a>;
+
+    fn err(&self) -> Result<()>;
 }
 
 #[derive(Default, Debug, Hash, Clone)]
