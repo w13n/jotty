@@ -252,7 +252,7 @@ impl Model for SqliteModel {
             .get_result(&mut *self.0.borrow_mut());
         if let Ok(len) = result {
             return len as usize;
-        };
+        }
 
         self.1.set(true);
         0
@@ -267,7 +267,7 @@ impl Model for SqliteModel {
             .get_result(&mut *self.0.borrow_mut());
         if let Ok(len) = result {
             return len as usize;
-        };
+        }
 
         self.1.set(true);
         0
@@ -281,8 +281,7 @@ impl Model for SqliteModel {
             .order(index.asc())
             .load(&mut *self.0.borrow_mut())
             .map(|vec| {
-                Box::new(vec.into_iter().map(|elem| elem.to()))
-                    as Box<dyn Iterator<Item = Event> + 'a>
+                Box::new(vec.into_iter().map(SQLEvent::to)) as Box<dyn Iterator<Item = Event> + 'a>
             })
             .unwrap_or_else(|_| {
                 self.1.set(true);
@@ -298,8 +297,7 @@ impl Model for SqliteModel {
             .order(index.asc())
             .load(&mut *self.0.borrow_mut())
             .map(|vec| {
-                Box::new(vec.into_iter().map(|elem| elem.to()))
-                    as Box<dyn Iterator<Item = Task> + 'a>
+                Box::new(vec.into_iter().map(SQLTask::to)) as Box<dyn Iterator<Item = Task> + 'a>
             })
             .unwrap_or_else(|_| {
                 self.1.set(true);

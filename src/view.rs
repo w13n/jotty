@@ -64,7 +64,7 @@ impl View {
 
     pub fn render(&mut self) -> Result<()> {
         if let Err(e) = self.model.err() {
-            self.render_err(e)
+            self.render_err(&e)
         } else {
             self.render_default()
         }
@@ -223,7 +223,7 @@ impl View {
         frame.render_stateful_widget(value_list, value_area, ls);
     }
 
-    fn render_err(&mut self, err: Error) -> Result<()> {
+    fn render_err(&mut self, err: &Error) -> Result<()> {
         self.terminal.draw(|frame| {
             let title = Line::from(" Jotty Error ".red().bold());
             let container_block = Block::new()
@@ -360,10 +360,11 @@ impl View {
     }
 
     pub fn enter_editing_mode(&mut self) {
-        if self.model.err().is_ok() && self.help_menu.is_none() {
-            if let Some(editing_str) = self.get_editing_string() {
-                self.editing = Some(editing_str.len());
-            }
+        if self.model.err().is_ok()
+            && self.help_menu.is_none()
+            && let Some(editing_str) = self.get_editing_string()
+        {
+            self.editing = Some(editing_str.len());
         }
     }
 
@@ -380,38 +381,40 @@ impl View {
     }
 
     pub fn move_cursor_right(&mut self) {
-        if self.model.err().is_ok() && self.help_menu.is_none() {
-            if let Some(len) = self.get_editing_string().map(|x| x.len()) {
-                self.editing = self.editing.map(|x| if x < len { x + 1 } else { x });
-            }
+        if self.model.err().is_ok()
+            && self.help_menu.is_none()
+            && let Some(len) = self.get_editing_string().map(|x| x.len())
+        {
+            self.editing = self.editing.map(|x| if x < len { x + 1 } else { x });
         }
     }
 
     pub fn insert_char(&mut self, c: char) {
-        if self.model.err().is_ok() && self.help_menu.is_none() {
-            if let Some(idx) = self.editing {
-                let mut new_str = self
-                    .get_editing_string()
-                    .expect("editing has some")
-                    .to_string();
-                new_str.insert(idx, c);
-                self.update_editing_string(new_str);
-                self.editing = self.editing.map(|x| x + 1);
-            }
+        if self.model.err().is_ok()
+            && self.help_menu.is_none()
+            && let Some(idx) = self.editing
+        {
+            let mut new_str = self
+                .get_editing_string()
+                .expect("editing has some")
+                .to_string();
+            new_str.insert(idx, c);
+            self.update_editing_string(new_str);
+            self.editing = self.editing.map(|x| x + 1);
         }
     }
 
     pub fn delete_char(&mut self) {
-        if self.model.err().is_ok() && self.help_menu.is_none() {
-            if let Some(editing) = self.editing
-                && let Some(str) = self.get_editing_string()
-            {
-                let mut new_str = str.to_string();
-                new_str.remove(editing - 1);
-                if editing > 0 {
-                    self.update_editing_string(new_str);
-                    self.editing = self.editing.map(|x| x - 1);
-                }
+        if self.model.err().is_ok()
+            && self.help_menu.is_none()
+            && let Some(editing) = self.editing
+            && let Some(str) = self.get_editing_string()
+        {
+            let mut new_str = str.to_string();
+            new_str.remove(editing - 1);
+            if editing > 0 {
+                self.update_editing_string(new_str);
+                self.editing = self.editing.map(|x| x - 1);
             }
         }
     }
