@@ -38,14 +38,22 @@ impl View {
             .unwrap_or(OffsetDateTime::now_utc())
             .date();
 
+        let mut events_state = ListState::default();
+        let mut task_state = ListState::default();
+        if model.events_len(date) > 0 {
+            events_state.select(Some(0));
+        } else if model.tasks_len(date) > 0 {
+            task_state.select(Some(0));
+        }
+
         Self {
             terminal,
             model,
             date,
             bg_message: None,
             editing: None,
-            events_state: ListState::default(),
-            task_state: ListState::default(),
+            events_state,
+            task_state,
         }
     }
 
