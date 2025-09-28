@@ -3,16 +3,14 @@ use std::io::Result;
 use anyhow::Error;
 use ratatui::DefaultTerminal;
 use ratatui::layout::Position;
-use ratatui::prelude::Color;
+use ratatui::prelude::*;
 use ratatui::text::Span;
-use ratatui::text::ToLine;
 use ratatui::text::ToSpan;
 use ratatui::widgets::ListItem;
 use ratatui::widgets::ListState;
 use ratatui::{
     layout::{Constraint, Flex, Layout},
     style::Style,
-    style::Stylize,
     symbols::border,
     text::{Line, Text},
     widgets::{Block, List, Paragraph, Wrap},
@@ -28,6 +26,7 @@ pub struct View {
     date: Date,
     editing: Option<usize>,
     bg_message: Option<String>,
+    help_menu: Option<ListState>,
     events_state: ListState,
     task_state: ListState,
 }
@@ -51,6 +50,7 @@ impl View {
             model,
             date,
             bg_message: None,
+            help_menu: None,
             editing: None,
             events_state,
             task_state,
@@ -76,25 +76,25 @@ impl View {
                 Layout::vertical([Constraint::Max(1), Constraint::Min(1), Constraint::Max(1)])
                     .flex(Flex::Center)
                     .areas(frame.area());
-            let [events_rect, tasks_rect] =
-                Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
-                    .areas(middle);
 
             let title = Line::from(vec![
                 "Jotty".green().bold(),
                 " entry on ".bold(),
                 self.date.to_string().blue().bold(),
             ]);
-            let instructions = Line::from(
-                "<q> to quit; <←↑↓→> to navigate; <SPACE> to cycle; <ENTER> to type".gray(),
-            );
+            let instructions = Line::from("<q> to quit;  <h> for help".gray());
             let container_block = Block::new()
                 .title(title.centered())
                 .title_bottom(instructions.centered());
 
             frame.render_widget(container_block, frame.area());
-
-            if self.model.events_len(self.date) != 0 || self.model.tasks_len(self.date) != 0 {
+            if let Some(ls) = &mut self.help_menu {
+                View::render_help_frame(frame, middle, ls);
+            } else if self.model.events_len(self.date) != 0 || self.model.tasks_len(self.date) != 0
+            {
+                let [events_rect, tasks_rect] =
+                    Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
+                        .areas(middle);
                 let events_title = Line::from(" Events ".red().bold());
                 let events_block = Block::bordered()
                     .title(events_title.centered())
@@ -156,7 +156,7 @@ impl View {
                         2
                     })])
                     .flex(Flex::Center)
-                    .areas(frame.area());
+                    .areas(middle);
 
                 let background_text = Paragraph::new(if let Some(msg) = &self.bg_message {
                     Text::from_iter([
@@ -171,6 +171,56 @@ impl View {
             }
         })?;
         Ok(())
+    }
+
+    fn render_help_frame(frame: &mut Frame, area: Rect, ls: &mut ListState) {
+        let [help_area] = Layout::vertical([Constraint::Length(12)])
+            .flex(Flex::Center)
+            .areas(area);
+        let [key_area, value_area] =
+            Layout::horizontal([Constraint::Percentage(45), Constraint::Percentage(55)])
+                .areas(help_area);
+        let key_list = List::from_iter(
+            [
+                "q",
+                "h",
+                "e",
+                "t",
+                "n",
+                "\' \'",
+                "d",
+                "ENTER",
+                "ARROW",
+                "SHIFT + ARROW",
+                "c",
+            ]
+            .map(|x| {
+                Line::from(format!("{x} : "))
+                    .bold()
+                    .alignment(Alignment::Right)
+            }),
+        )
+        .highlight_style(Style::new().fg(Color::Green));
+        let value_list = List::from_iter(
+            [
+                "quit jotty",
+                "toggle this help menu",
+                "append a new event",
+                "append a new task",
+                "insert a new entry above the selected entry",
+                "cycle the selected entry",
+                "delete an entry",
+                "toggle editing mode for the selected entry",
+                "move the cursor",
+                "move between days",
+                "jump to today's page",
+            ]
+            .map(Line::from),
+        )
+        .highlight_style(Style::new().fg(Color::Blue));
+
+        frame.render_stateful_widget(key_list, key_area, ls);
+        frame.render_stateful_widget(value_list, value_area, ls);
     }
 
     fn render_err(&mut self, err: Error) -> Result<()> {
@@ -193,7 +243,9 @@ impl View {
     pub fn move_up(&mut self) {
         if self.model.err().is_ok() {
             self.editing = None;
-            if self.events_state.selected().is_some() {
+            if let Some(ls) = &mut self.help_menu {
+                ls.select_previous();
+            } else if self.events_state.selected().is_some() {
                 self.events_state.select_previous();
             } else if self.task_state.selected().is_some() {
                 self.task_state.select_previous();
@@ -204,7 +256,9 @@ impl View {
     pub fn move_down(&mut self) {
         if self.model.err().is_ok() {
             self.editing = None;
-            if self.events_state.selected().is_some() {
+            if let Some(ls) = &mut self.help_menu {
+                ls.select_next();
+            } else if self.events_state.selected().is_some() {
                 self.events_state.select_next();
             } else if self.task_state.selected().is_some() {
                 self.task_state.select_next();
@@ -213,7 +267,7 @@ impl View {
     }
 
     pub fn move_left(&mut self) {
-        if self.model.err().is_ok() {
+        if self.model.err().is_ok() && self.help_menu.is_none() {
             self.editing = None;
             if self.task_state.selected().is_some() && self.model.events_len(self.date) > 0 {
                 self.events_state.select(self.task_state.selected());
@@ -223,7 +277,7 @@ impl View {
     }
 
     pub fn move_right(&mut self) {
-        if self.model.err().is_ok() {
+        if self.model.err().is_ok() && self.help_menu.is_none() {
             self.editing = None;
             if self.events_state.selected().is_some() && self.model.tasks_len(self.date) > 0 {
                 self.task_state.select(self.events_state.selected());
@@ -233,7 +287,7 @@ impl View {
     }
 
     pub fn cycle(&mut self) {
-        if self.model.err().is_ok() {
+        if self.model.err().is_ok() && self.help_menu.is_none() {
             self.editing = None;
             if let Some(idx) = self.task_state.selected() {
                 let cycled_task = self
@@ -258,13 +312,13 @@ impl View {
     }
 
     pub fn move_to_next(&mut self) {
-        if self.model.err().is_ok() {
+        if self.model.err().is_ok() && self.help_menu.is_none() {
             self.move_to(self.date.next_day().expect("we will never reach max date"));
         }
     }
 
     pub fn move_to_prev(&mut self) {
-        if self.model.err().is_ok() {
+        if self.model.err().is_ok() && self.help_menu.is_none() {
             self.move_to(
                 self.date
                     .previous_day()
@@ -274,7 +328,7 @@ impl View {
     }
 
     pub fn move_to_today(&mut self) {
-        if self.model.err().is_ok() {
+        if self.model.err().is_ok() && self.help_menu.is_none() {
             self.move_to(
                 OffsetDateTime::now_local()
                     .unwrap_or(OffsetDateTime::now_utc())
@@ -284,31 +338,29 @@ impl View {
     }
 
     fn move_to(&mut self, date: Date) {
-        if self.model.err().is_ok() {
-            self.editing = None;
-            self.date = date;
-            if self.task_state.selected().is_some() && self.model.tasks_len(date) == 0 {
-                if self.model.events_len(date) > 0 {
-                    self.events_state.select(self.task_state.selected());
-                }
-                self.task_state.select(None);
-            } else if self.events_state.selected().is_some() && self.model.events_len(date) == 0 {
-                if self.model.tasks_len(date) > 0 {
-                    self.task_state.select(self.events_state.selected());
-                }
-                self.events_state.select(None);
-            } else if self.task_state.selected().is_none() && self.task_state.selected().is_none() {
-                if self.model.events_len(date) > 0 {
-                    self.events_state.select(Some(0));
-                } else if self.model.tasks_len(date) > 0 {
-                    self.task_state.select(Some(0));
-                }
+        self.editing = None;
+        self.date = date;
+        if self.task_state.selected().is_some() && self.model.tasks_len(date) == 0 {
+            if self.model.events_len(date) > 0 {
+                self.events_state.select(self.task_state.selected());
+            }
+            self.task_state.select(None);
+        } else if self.events_state.selected().is_some() && self.model.events_len(date) == 0 {
+            if self.model.tasks_len(date) > 0 {
+                self.task_state.select(self.events_state.selected());
+            }
+            self.events_state.select(None);
+        } else if self.task_state.selected().is_none() && self.task_state.selected().is_none() {
+            if self.model.events_len(date) > 0 {
+                self.events_state.select(Some(0));
+            } else if self.model.tasks_len(date) > 0 {
+                self.task_state.select(Some(0));
             }
         }
     }
 
     pub fn enter_editing_mode(&mut self) {
-        if self.model.err().is_ok() {
+        if self.model.err().is_ok() && self.help_menu.is_none() {
             if let Some(editing_str) = self.get_editing_string() {
                 self.editing = Some(editing_str.len());
             }
@@ -316,19 +368,19 @@ impl View {
     }
 
     pub fn exit_editing_mode(&mut self) {
-        if self.model.err().is_ok() {
+        if self.model.err().is_ok() && self.help_menu.is_none() {
             self.editing = None;
         }
     }
 
     pub fn move_cursor_left(&mut self) {
-        if self.model.err().is_ok() {
+        if self.model.err().is_ok() && self.help_menu.is_none() {
             self.editing = self.editing.map(|x| if x > 0 { x - 1 } else { x });
         }
     }
 
     pub fn move_cursor_right(&mut self) {
-        if self.model.err().is_ok() {
+        if self.model.err().is_ok() && self.help_menu.is_none() {
             if let Some(len) = self.get_editing_string().map(|x| x.len()) {
                 self.editing = self.editing.map(|x| if x < len { x + 1 } else { x });
             }
@@ -336,7 +388,7 @@ impl View {
     }
 
     pub fn insert_char(&mut self, c: char) {
-        if self.model.err().is_ok() {
+        if self.model.err().is_ok() && self.help_menu.is_none() {
             if let Some(idx) = self.editing {
                 let mut new_str = self
                     .get_editing_string()
@@ -350,7 +402,7 @@ impl View {
     }
 
     pub fn delete_char(&mut self) {
-        if self.model.err().is_ok() {
+        if self.model.err().is_ok() && self.help_menu.is_none() {
             if let Some(editing) = self.editing
                 && let Some(str) = self.get_editing_string()
             {
@@ -365,7 +417,7 @@ impl View {
     }
 
     pub fn append_new_event(&mut self) {
-        if self.model.err().is_ok() {
+        if self.model.err().is_ok() && self.help_menu.is_none() {
             let idx = self.model.events_len(self.date);
             self.model
                 .new_event(self.date, idx)
@@ -377,7 +429,7 @@ impl View {
     }
 
     pub fn append_new_task(&mut self) {
-        if self.model.err().is_ok() {
+        if self.model.err().is_ok() && self.help_menu.is_none() {
             let idx = self.model.tasks_len(self.date);
             self.model
                 .new_task(self.date, idx)
@@ -389,7 +441,7 @@ impl View {
     }
 
     pub fn insert_new_item(&mut self) {
-        if self.model.err().is_ok() {
+        if self.model.err().is_ok() && self.help_menu.is_none() {
             if let Some(idx) = self.events_state.selected() {
                 self.model
                     .new_event(self.date, idx)
@@ -405,7 +457,7 @@ impl View {
     }
 
     pub fn delete(&mut self) {
-        if self.model.err().is_ok() {
+        if self.model.err().is_ok() && self.help_menu.is_none() {
             self.editing = None;
             if let Some(idx) = self.events_state.selected() {
                 self.model
@@ -476,6 +528,14 @@ impl View {
             self.model
                 .replace_event(self.date, idx, new_event)
                 .expect("selected cannot be out of bounds");
+        }
+    }
+
+    pub fn toggle_help(&mut self) {
+        if self.help_menu.is_some() {
+            self.help_menu = None;
+        } else {
+            self.help_menu = Some(ListState::default().with_selected(Some(0)));
         }
     }
 }

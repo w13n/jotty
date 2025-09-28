@@ -73,6 +73,7 @@ impl Controller {
                         } else {
                             match c {
                                 'q' => self.should_exit = true,
+                                'h' => self.view.toggle_help(),
                                 ' ' => self.view.cycle(),
                                 'c' => self.view.move_to_today(),
                                 'n' => {
