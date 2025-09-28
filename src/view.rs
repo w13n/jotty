@@ -114,22 +114,28 @@ impl View {
 
                 frame.render_stateful_widget(events_widget, events_rect, &mut self.events_state);
                 frame.render_stateful_widget(task_widget, tasks_rect, &mut self.task_state);
-                if let Some(offset) = self.editing {
+                if let Some(str_offset) = self.editing {
                     let is_events_side = self.events_state.selected().is_some();
-                    let selected = if is_events_side {
-                        self.events_state.selected().unwrap()
+                    let (selected, height_offset) = if is_events_side {
+                        (
+                            self.events_state.selected().unwrap(),
+                            self.events_state.offset(),
+                        )
                     } else {
-                        self.task_state.selected().unwrap()
+                        (
+                            self.task_state.selected().unwrap(),
+                            self.task_state.offset(),
+                        )
                     };
                     let position = if is_events_side {
                         Position::new(
-                            events_rect.x + 1 + offset as u16,
-                            events_rect.y + 1 + selected as u16,
+                            events_rect.x + 1 + str_offset as u16,
+                            events_rect.y + 1 + selected as u16 - height_offset as u16,
                         )
                     } else {
                         Position::new(
-                            tasks_rect.x + 4 + offset as u16,
-                            tasks_rect.y + 1 + selected as u16,
+                            tasks_rect.x + 4 + str_offset as u16,
+                            tasks_rect.y + 1 + selected as u16 - height_offset as u16,
                         )
                     };
                     frame.set_cursor_position(position);
