@@ -5,14 +5,16 @@ use ratatui::DefaultTerminal;
 use ratatui::layout::Position;
 use ratatui::prelude::Color;
 use ratatui::text::Span;
+use ratatui::text::ToLine;
+use ratatui::text::ToSpan;
 use ratatui::widgets::ListItem;
 use ratatui::widgets::ListState;
 use ratatui::{
-    layout::{Constraint, Layout},
+    layout::{Constraint, Flex, Layout},
     style::Style,
     style::Stylize,
     symbols::border,
-    text::Line,
+    text::{Line, Text},
     widgets::{Block, List, Paragraph, Wrap},
 };
 use time::{Date, OffsetDateTime};
@@ -25,6 +27,7 @@ pub struct View {
     model: Box<dyn Model>,
     date: Date,
     editing: Option<usize>,
+    bg_message: Option<String>,
     events_state: ListState,
     task_state: ListState,
 }
@@ -39,10 +42,16 @@ impl View {
             terminal,
             model,
             date,
+            bg_message: None,
             editing: None,
             events_state: ListState::default(),
             task_state: ListState::default(),
         }
+    }
+
+    pub fn background_text(mut self, str: String) -> Self {
+        self.bg_message = Some(str);
+        self
     }
 
     pub fn render(&mut self) -> Result<()> {
@@ -57,6 +66,7 @@ impl View {
         self.terminal.draw(|frame| {
             let [_top, middle, _bottom] =
                 Layout::vertical([Constraint::Max(1), Constraint::Min(1), Constraint::Max(1)])
+                    .flex(Flex::Center)
                     .areas(frame.area());
             let [events_rect, tasks_rect] =
                 Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
@@ -74,11 +84,7 @@ impl View {
                 .title(title.centered())
                 .title_bottom(instructions.centered());
 
-            let container = Paragraph::new("no entry for this date")
-                .centered()
-                .block(container_block);
-
-            frame.render_widget(container, frame.area());
+            frame.render_widget(container_block, frame.area());
 
             if self.model.events_len(self.date) != 0 || self.model.tasks_len(self.date) != 0 {
                 let events_title = Line::from(" Events ".red().bold());
@@ -128,6 +134,26 @@ impl View {
                     };
                     frame.set_cursor_position(position);
                 }
+            } else {
+                let [bg_text_area] =
+                    Layout::vertical([Constraint::Length(if self.bg_message.is_none() {
+                        1
+                    } else {
+                        2
+                    })])
+                    .flex(Flex::Center)
+                    .areas(frame.area());
+
+                let background_text = Paragraph::new(if let Some(msg) = &self.bg_message {
+                    Text::from_iter([
+                        "no entries or tasks yet today".to_span(),
+                        msg.as_str().bold().magenta(),
+                    ])
+                } else {
+                    Text::from("no entries or tasks yet today")
+                })
+                .centered();
+                frame.render_widget(background_text, bg_text_area);
             }
         })?;
         Ok(())

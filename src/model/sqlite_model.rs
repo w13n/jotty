@@ -1,6 +1,7 @@
 use std::{
     cell::{Cell, RefCell},
     iter,
+    path::Path,
 };
 
 use anyhow::{Result, anyhow};
@@ -428,4 +429,29 @@ mod tables {
             completion_level -> Integer,
         }
     }
+}
+
+pub fn establish_connection(path: &Path) -> Result<SqliteConnection> {
+    let mut sqlite_conn = SqliteConnection::establish(
+        path.to_str()
+            .ok_or(anyhow!("cannot create a db connection to path"))?,
+    )?;
+    diesel::sql_query(
+        "CREATE TABLE IF NOT EXISTS `events` (
+	`date` INT NOT NULL,
+	`index` INT NOT NULL,
+	`title` TEXT NOT NULL,
+	`importance` INT NOT NULL)",
+    )
+    .execute(&mut sqlite_conn)?;
+    diesel::sql_query(
+        "CREATE TABLE IF NOT EXISTS `tasks` (
+	`date` INT NOT NULL,
+	`index` INT NOT NULL,
+	`title` TEXT NOT NULL,
+	`completion_level` INT NOT NULL)",
+    )
+    .execute(&mut sqlite_conn)?;
+
+    Ok(sqlite_conn)
 }
