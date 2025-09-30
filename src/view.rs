@@ -409,13 +409,12 @@ impl View {
             && self.help_menu.is_none()
             && let Some(editing) = self.editing
             && let Some(str) = self.get_editing_string()
+            && editing > 0
         {
-            if editing > 0 {
-                let mut new_str = str.to_string();
-                new_str.remove(editing - 1);
-                self.update_editing_string(new_str);
-                self.editing = self.editing.map(|x| x - 1);
-            }
+            let mut new_str = str.to_string();
+            new_str.remove(editing - 1);
+            self.update_editing_string(new_str);
+            self.editing = self.editing.map(|x| x - 1);
         }
     }
 

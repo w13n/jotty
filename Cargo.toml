@@ -11,3 +11,4 @@ time = { version = "0.3.41", features = ["local-offset"] }
 diesel = { version = "2.2.0", features = ["sqlite", "returning_clauses_for_sqlite_3_35"] }
 directories-next = "2.0.0"
 libsqlite3-sys = { version = "0.30", features = ["bundled"] }
+clap = { version = "4.5.48", features = ["derive"] }
