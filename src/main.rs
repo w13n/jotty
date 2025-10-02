@@ -3,6 +3,7 @@ mod controller;
 mod model;
 mod view;
 
+use std::fs::create_dir_all;
 use std::io;
 
 use clap::Parser;
@@ -30,8 +31,12 @@ fn get_controller(args: cli::Cli, terminal: DefaultTerminal) -> Controller {
     } else if let Some(mut path) = directories_next::ProjectDirs::from("com", "w13n", "jotty")
         .map(|x| x.data_dir().to_path_buf())
     {
-        path.push("v1.db");
-        Some(path)
+        if create_dir_all(&path).is_ok() {
+            path.push("v1.db");
+            Some(path)
+        } else {
+            None
+        }
     } else {
         None
     };
