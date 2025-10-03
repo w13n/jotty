@@ -82,7 +82,7 @@ impl View {
                 " entry on ".bold(),
                 self.date.to_string().blue().bold(),
             ]);
-            let instructions = Line::from("<q> to quit;  <h> for help".gray());
+            let instructions = Line::from("<q> to quit; <h> for help".gray());
             let container_block = Block::new()
                 .title(title.centered())
                 .title_bottom(instructions.centered());
@@ -359,18 +359,25 @@ impl View {
         }
     }
 
-    pub fn enter_editing_mode(&mut self) {
-        if self.model.err().is_ok()
-            && self.help_menu.is_none()
-            && let Some(editing_str) = self.get_editing_string()
-        {
-            self.editing = Some(editing_str.len());
+    pub fn toggle_editing_mode(&mut self) {
+        if self.model.err().is_ok() && self.help_menu.is_none() {
+            if self.editing.is_none()
+                && let Some(editing_str) = self.get_editing_string()
+            {
+                self.editing = Some(editing_str.len());
+            } else {
+                self.editing = None;
+            }
         }
     }
 
-    pub fn exit_editing_mode(&mut self) {
-        if self.model.err().is_ok() && self.help_menu.is_none() {
-            self.editing = None;
+    pub fn exit_mode(&mut self) {
+        if self.model.err().is_ok() {
+            if self.help_menu.is_some() {
+                self.help_menu = None;
+            } else {
+                self.editing = None;
+            }
         }
     }
 

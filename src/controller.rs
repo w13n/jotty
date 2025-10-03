@@ -59,14 +59,8 @@ impl Controller {
                         }
                     }
                     KeyCode::Backspace => self.view.delete_char(),
-                    KeyCode::Enter => {
-                        if self.view.is_editing() {
-                            self.view.exit_editing_mode();
-                        } else {
-                            self.view.enter_editing_mode();
-                        }
-                    }
-                    KeyCode::Esc => self.view.exit_editing_mode(),
+                    KeyCode::Enter => self.view.toggle_editing_mode(),
+                    KeyCode::Esc => self.view.exit_mode(),
                     KeyCode::Char(c) => {
                         if self.view.is_editing() {
                             self.view.insert_char(c);
