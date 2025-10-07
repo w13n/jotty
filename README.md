@@ -15,4 +15,4 @@ Jotty can be compiled from source code as a standard rust project.
 If you have issues, suggestions, or contributions, feel free to politely and civilly use pull requests and other appropriate available GitHub features. I cannot promise quick responses.
 
 # License
-Jotty is not currently Licensed.
+Jotty currently licensed under the Mozilla Public License 2.0.

@@ -1,7 +1,11 @@
 [package]
 name = "jotty"
+description = "a bullet journal for your terminal"
 version = "0.1.0"
 edition = "2024"
+license = "MPL-2.0"
+readme = "README.md"
+repository = "https://github.com/w13n/jotty"
 
 [dependencies]
 anyhow = "1.0.99"

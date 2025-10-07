@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use clap::Parser;
 
 #[derive(Parser)]
-#[command(version, about, long_about = None)]
+#[command(version, about="a bullet journal for your terminal", long_about = None)]
 pub struct Cli {
     /// the path to a sqlite database to use instead of the default
     #[arg(short, long, conflicts_with = "ephemeral")]
