@@ -16,3 +16,9 @@ diesel = { version = "2.2.0", features = ["sqlite", "returning_clauses_for_sqlit
 directories-next = "2.0.0"
 libsqlite3-sys = { version = "0.30", features = ["bundled"] }
 clap = { version = "4.5.48", features = ["derive"] }
+
+[profile.release]
+codegen-units = 1 # Allows compiler to perform better optimization.
+lto = true # Enables Link-time Optimization.
+opt-level = "s" # Prioritizes small binary size. Use `3` if you prefer speed.
+strip = true # Ensures debug symbols are removed.
