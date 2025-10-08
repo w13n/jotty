@@ -1,7 +1,7 @@
 # Jotty
 Jotty is a bullet journal for your terminal. Written in Rust using Ratatui, SQLite, and MVC architecture, Jotty is designed to be lightweight, snappy, simple, robust, and helpful.
 
-[screenshots]
+![a gif of jotty running](https://vhs.charm.sh/vhs-58dmZQU1EBrGoo8Gskoeg6.gif)
 
 # Build From Source
 Jotty can be compiled from source code as a standard rust project.
