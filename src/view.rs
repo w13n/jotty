@@ -82,7 +82,7 @@ impl View {
                 " entry on ".bold(),
                 self.date.to_string().blue().bold(),
             ]);
-            let instructions = Line::from("<q> to quit; <h> for help".gray());
+            let instructions = Line::from("<q> to quit; <m> for help menu".gray());
             let container_block = Block::new()
                 .title(title.centered())
                 .title_bottom(instructions.centered());
@@ -182,17 +182,18 @@ impl View {
                 .areas(help_area);
         let key_list = List::from_iter(
             [
-                "q",
-                "h",
-                "e",
-                "t",
-                "n",
-                "\' \'",
-                "d",
-                "ENTER",
-                "ARROW",
-                "SHIFT + ARROW",
-                "c",
+                "<q>",
+                "<m>",
+                "<e>",
+                "<t>",
+                "<n> OR <O>",
+                "<o>",
+                "<\' \'>",
+                "<d>",
+                "<ENTER> OR <i>",
+                "ARROW OR <h|j|k|l>",
+                "(<SHIFT> + <ARROW>) OR <H|L>",
+                "<c>",
             ]
             .map(|x| {
                 Line::from(format!("{x} : "))
@@ -208,6 +209,7 @@ impl View {
                 "append a new event",
                 "append a new task",
                 "insert a new entry above the selected entry",
+                "insert a new entry below the selected entry",
                 "cycle the selected entry",
                 "delete an entry",
                 "toggle editing mode for the selected entry",
@@ -449,7 +451,7 @@ impl View {
         }
     }
 
-    pub fn insert_new_item(&mut self) {
+    pub fn insert_above_new_item(&mut self) {
         if self.model.err().is_ok() && self.help_menu.is_none() {
             if let Some(idx) = self.events_state.selected() {
                 self.model
@@ -465,6 +467,23 @@ impl View {
         }
     }
 
+    pub fn insert_below_new_item(&mut self) {
+        if self.model.err().is_ok() && self.help_menu.is_none() {
+            if let Some(idx) = self.events_state.selected() {
+                self.model
+                    .new_event(self.date, idx + 1)
+                    .expect("idx was set based on selected");
+                self.events_state.select(Some(idx + 1));
+                self.editing = Some(0);
+            } else if let Some(idx) = self.task_state.selected() {
+                self.model
+                    .new_task(self.date, idx + 1)
+                    .expect("idx was set based on selected");
+                self.task_state.select(Some(idx + 1));
+                self.editing = Some(0);
+            }
+        }
+    }
     pub fn delete(&mut self) {
         if self.model.err().is_ok() && self.help_menu.is_none() {
             self.editing = None;

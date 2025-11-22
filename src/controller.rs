@@ -67,15 +67,21 @@ impl Controller {
                         } else {
                             match c {
                                 'q' => self.should_exit = true,
-                                'h' => self.view.toggle_help(),
+                                'm' => self.view.toggle_help(),
+                                'h' => self.view.move_left(),
+                                'H' => self.view.move_to_prev(),
+                                'l' => self.view.move_right(),
+                                'L' => self.view.move_to_next(),
+                                'j' => self.view.move_down(),
+                                'k' => self.view.move_up(),
                                 ' ' => self.view.cycle(),
                                 'c' => self.view.move_to_today(),
-                                'n' => {
-                                    self.view.insert_new_item();
-                                }
+                                'n' | 'O' => self.view.insert_above_new_item(),
+                                'o' => self.view.insert_below_new_item(),
                                 'e' => self.view.append_new_event(),
                                 't' => self.view.append_new_task(),
                                 'd' => self.view.delete(),
+                                'i' => self.view.toggle_editing_mode(),
                                 _ => {}
                             }
                         }
