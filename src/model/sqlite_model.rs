@@ -27,30 +27,31 @@ impl Model for SqliteModel {
         let len = self.events_len(d);
 
         if i <= len {
-            diesel::update(events)
-                .filter(
-                    date.eq(julian_date)
-                        .and(index.eq(i as i32).or(index.gt(i as i32))),
-                )
-                .set(index.eq(index + 1))
-                .execute(self.0.get_mut())
-                .unwrap_or_else(|_| {
-                    self.1.set(true);
-                    0
-                });
+            self.0
+                .get_mut()
+                .transaction(|conn| {
+                    diesel::update(events)
+                        .filter(
+                            date.eq(julian_date)
+                                .and(index.eq(i as i32).or(index.gt(i as i32))),
+                        )
+                        .set(index.eq(index + 1))
+                        .execute(conn)?;
 
-            let new_event = SQLEvent::new(julian_date, i as i32);
+                    let new_event = SQLEvent::new(julian_date, i as i32);
 
-            diesel::insert_into(events)
-                .values(&new_event)
-                .execute(self.0.get_mut())
-                .unwrap_or_else(|_| {
-                    self.1.set(true);
-                    0
-                });
+                    diesel::insert_into(events)
+                        .values(&new_event)
+                        .execute(conn)?;
+
+                    diesel::result::QueryResult::Ok(())
+                })
+                .unwrap_or_else(|_| self.1.set(true));
+
+            Ok(())
+        } else {
+            Err(anyhow!("index out of bounds"))
         }
-
-        Ok(())
     }
 
     fn new_task(&mut self, d: Date, i: usize) -> Result<()> {
@@ -60,27 +61,23 @@ impl Model for SqliteModel {
         let len = self.tasks_len(d);
 
         if i <= len {
-            diesel::update(tasks)
-                .filter(
-                    date.eq(julian_date)
-                        .and(index.eq(i as i32).or(index.gt(i as i32))),
-                )
-                .set(index.eq(index + 1))
-                .execute(self.0.get_mut())
-                .unwrap_or_else(|_| {
-                    self.1.set(true);
-                    0
-                });
+            self.0
+                .get_mut()
+                .transaction(|conn| {
+                    diesel::update(tasks)
+                        .filter(
+                            date.eq(julian_date)
+                                .and(index.eq(i as i32).or(index.gt(i as i32))),
+                        )
+                        .set(index.eq(index + 1))
+                        .execute(conn)?;
 
-            let new_task = SQLTask::new(julian_date, i as i32);
+                    let new_task = SQLTask::new(julian_date, i as i32);
 
-            diesel::insert_into(tasks)
-                .values(&new_task)
-                .execute(self.0.get_mut())
-                .unwrap_or_else(|_| {
-                    self.1.set(true);
-                    0
-                });
+                    diesel::insert_into(tasks).values(&new_task).execute(conn)?;
+                    diesel::result::QueryResult::Ok(())
+                })
+                .unwrap_or_else(|_| self.1.set(true));
             Ok(())
         } else {
             Err(anyhow!("index out of bounds"))
@@ -94,22 +91,20 @@ impl Model for SqliteModel {
         let len = self.events_len(d);
 
         if i < len {
-            diesel::delete(events)
-                .filter(date.eq(julian_date).and(index.eq(i as i32)))
-                .execute(self.0.get_mut())
-                .unwrap_or_else(|_| {
-                    self.1.set(true);
-                    0
-                });
+            self.0
+                .get_mut()
+                .transaction(|conn| {
+                    diesel::delete(events)
+                        .filter(date.eq(julian_date).and(index.eq(i as i32)))
+                        .execute(conn)?;
 
-            diesel::update(events)
-                .filter(date.eq(julian_date).and(index.gt(i as i32)))
-                .set(index.eq(index - 1))
-                .execute(self.0.get_mut())
-                .unwrap_or_else(|_| {
-                    self.1.set(true);
-                    0
-                });
+                    diesel::update(events)
+                        .filter(date.eq(julian_date).and(index.gt(i as i32)))
+                        .set(index.eq(index - 1))
+                        .execute(conn)?;
+                    diesel::result::QueryResult::Ok(())
+                })
+                .unwrap_or_else(|_| self.1.set(true));
             Ok(())
         } else {
             Err(anyhow!("index out of bounds"))
@@ -123,22 +118,20 @@ impl Model for SqliteModel {
         let len = self.tasks_len(d);
 
         if i < len {
-            diesel::delete(tasks)
-                .filter(date.eq(julian_date).and(index.eq(i as i32)))
-                .execute(self.0.get_mut())
-                .unwrap_or_else(|_| {
-                    self.1.set(true);
-                    0
-                });
+            self.0
+                .get_mut()
+                .transaction(|conn| {
+                    diesel::delete(tasks)
+                        .filter(date.eq(julian_date).and(index.eq(i as i32)))
+                        .execute(conn)?;
 
-            diesel::update(tasks)
-                .filter(date.eq(julian_date).and(index.gt(i as i32)))
-                .set(index.eq(index - 1))
-                .execute(self.0.get_mut())
-                .unwrap_or_else(|_| {
-                    self.1.set(true);
-                    0
-                });
+                    diesel::update(tasks)
+                        .filter(date.eq(julian_date).and(index.gt(i as i32)))
+                        .set(index.eq(index - 1))
+                        .execute(conn)?;
+                    diesel::result::QueryResult::Ok(())
+                })
+                .unwrap_or_else(|_| self.1.set(true));
             Ok(())
         } else {
             Err(anyhow!("index out of bounds"))
@@ -194,21 +187,18 @@ impl Model for SqliteModel {
         let len = self.events_len(d);
 
         if i < len {
-            diesel::delete(events)
-                .filter(date.eq(julian_date).and(index.eq(i as i32)))
-                .execute(self.0.get_mut())
-                .unwrap_or_else(|_| {
-                    self.1.set(true);
-                    0
-                });
+            self.0
+                .get_mut()
+                .transaction(|conn| {
+                    diesel::delete(events)
+                        .filter(date.eq(julian_date).and(index.eq(i as i32)))
+                        .execute(conn)?;
 
-            diesel::insert_into(events)
-                .values(&event)
-                .execute(self.0.get_mut())
-                .unwrap_or_else(|_| {
-                    self.1.set(true);
-                    0
-                });
+                    diesel::insert_into(events).values(&event).execute(conn)?;
+
+                    diesel::result::QueryResult::Ok(())
+                })
+                .unwrap_or_else(|_| self.1.set(true));
             Ok(())
         } else {
             Err(anyhow!("index out of bounds"))
@@ -222,21 +212,18 @@ impl Model for SqliteModel {
         let len = self.tasks_len(d);
 
         if i < len {
-            diesel::delete(tasks)
-                .filter(date.eq(julian_date).and(index.eq(i as i32)))
-                .execute(self.0.get_mut())
-                .unwrap_or_else(|_| {
-                    self.1.set(true);
-                    0
-                });
+            self.0
+                .get_mut()
+                .transaction(|conn| {
+                    diesel::delete(tasks)
+                        .filter(date.eq(julian_date).and(index.eq(i as i32)))
+                        .execute(conn)?;
 
-            diesel::insert_into(tasks)
-                .values(&task)
-                .execute(self.0.get_mut())
-                .unwrap_or_else(|_| {
-                    self.1.set(true);
-                    0
-                });
+                    diesel::insert_into(tasks).values(&task).execute(conn)?;
+
+                    diesel::result::QueryResult::Ok(())
+                })
+                .unwrap_or_else(|_| self.1.set(true));
             Ok(())
         } else {
             Err(anyhow!("index out of bounds"))
@@ -251,21 +238,21 @@ impl Model for SqliteModel {
         if index1 < len && index2 < len {
             self.0
                 .get_mut()
-                .transaction(|connection| {
+                .transaction(|conn| {
                     diesel::update(events)
                         .filter(date.eq(julian_date).and(index.eq(index1 as i32)))
                         .set(index.eq(-1))
-                        .execute(connection)?;
+                        .execute(conn)?;
 
                     diesel::update(events)
                         .filter(date.eq(julian_date).and(index.eq(index2 as i32)))
                         .set(index.eq(index1 as i32))
-                        .execute(connection)?;
+                        .execute(conn)?;
 
                     diesel::update(events)
                         .filter(date.eq(julian_date).and(index.eq(-1)))
                         .set(index.eq(index2 as i32))
-                        .execute(connection)?;
+                        .execute(conn)?;
 
                     diesel::result::QueryResult::Ok(())
                 })
@@ -284,21 +271,21 @@ impl Model for SqliteModel {
         if index1 < len && index2 < len {
             self.0
                 .get_mut()
-                .transaction(|connection| {
+                .transaction(|conn| {
                     diesel::update(tasks)
                         .filter(date.eq(julian_date).and(index.eq(index1 as i32)))
                         .set(index.eq(-1))
-                        .execute(connection)?;
+                        .execute(conn)?;
 
                     diesel::update(tasks)
                         .filter(date.eq(julian_date).and(index.eq(index2 as i32)))
                         .set(index.eq(index1 as i32))
-                        .execute(connection)?;
+                        .execute(conn)?;
 
                     diesel::update(tasks)
                         .filter(date.eq(julian_date).and(index.eq(-1)))
                         .set(index.eq(index2 as i32))
-                        .execute(connection)?;
+                        .execute(conn)?;
 
                     diesel::result::QueryResult::Ok(())
                 })
