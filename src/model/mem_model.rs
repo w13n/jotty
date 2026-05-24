@@ -103,6 +103,28 @@ impl Model for MemModel {
         Err(anyhow!("index out of bounds"))
     }
 
+    fn swap_event(&mut self, date: Date, index1: usize, index2: usize) -> Result<()> {
+        if let Some(entry) = self.0.get_mut(&date)
+            && index1 < entry.events.len()
+            && index2 < entry.events.len()
+        {
+            entry.events.swap(index1, index2);
+            return Ok(());
+        }
+        Err(anyhow!("index out of bounds"))
+    }
+
+    fn swap_task(&mut self, date: Date, index1: usize, index2: usize) -> Result<()> {
+        if let Some(entry) = self.0.get_mut(&date)
+            && index1 < entry.tasks.len()
+            && index2 < entry.tasks.len()
+        {
+            entry.tasks.swap(index1, index2);
+            return Ok(());
+        }
+        Err(anyhow!("index out of bounds"))
+    }
+
     fn events_len(&self, date: Date) -> usize {
         self.0
             .get(&date)

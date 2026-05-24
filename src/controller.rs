@@ -38,8 +38,20 @@ impl Controller {
         match event::read()? {
             event::Event::Key(key_event) if key_event.kind == KeyEventKind::Press => {
                 match key_event.code {
-                    KeyCode::Up => self.view.move_up(),
-                    KeyCode::Down => self.view.move_down(),
+                    KeyCode::Up => {
+                        if key_event.modifiers.contains(KeyModifiers::SHIFT) {
+                            self.view.swap_up();
+                        } else {
+                            self.view.move_up()
+                        }
+                    }
+                    KeyCode::Down => {
+                        if key_event.modifiers.contains(KeyModifiers::SHIFT) {
+                            self.view.swap_down();
+                        } else {
+                            self.view.move_down()
+                        }
+                    }
                     KeyCode::Left => {
                         if key_event.modifiers.contains(KeyModifiers::SHIFT) {
                             self.view.move_to_prev();
@@ -73,7 +85,9 @@ impl Controller {
                                 'l' => self.view.move_right(),
                                 'L' => self.view.move_to_next(),
                                 'j' => self.view.move_down(),
+                                'J' => self.view.swap_down(),
                                 'k' => self.view.move_up(),
+                                'K' => self.view.swap_up(),
                                 ' ' => self.view.cycle(),
                                 'c' => self.view.move_to_today(),
                                 'n' | 'O' => self.view.insert_above_new_item(),

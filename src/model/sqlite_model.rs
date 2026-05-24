@@ -243,6 +243,72 @@ impl Model for SqliteModel {
         }
     }
 
+    fn swap_event(&mut self, d: Date, index1: usize, index2: usize) -> Result<()> {
+        use tables::events::dsl::*;
+        let julian_date = d.to_julian_day();
+        let len = self.events_len(d);
+
+        if index1 < len && index2 < len {
+            self.0
+                .get_mut()
+                .transaction(|connection| {
+                    diesel::update(events)
+                        .filter(date.eq(julian_date).and(index.eq(index1 as i32)))
+                        .set(index.eq(-1))
+                        .execute(connection)?;
+
+                    diesel::update(events)
+                        .filter(date.eq(julian_date).and(index.eq(index2 as i32)))
+                        .set(index.eq(index1 as i32))
+                        .execute(connection)?;
+
+                    diesel::update(events)
+                        .filter(date.eq(julian_date).and(index.eq(-1)))
+                        .set(index.eq(index2 as i32))
+                        .execute(connection)?;
+
+                    diesel::result::QueryResult::Ok(())
+                })
+                .unwrap_or_else(|_| self.1.set(true));
+            Ok(())
+        } else {
+            Err(anyhow!("index out of bounds"))
+        }
+    }
+
+    fn swap_task(&mut self, d: Date, index1: usize, index2: usize) -> Result<()> {
+        use tables::tasks::dsl::*;
+        let julian_date = d.to_julian_day();
+        let len = self.tasks_len(d);
+
+        if index1 < len && index2 < len {
+            self.0
+                .get_mut()
+                .transaction(|connection| {
+                    diesel::update(tasks)
+                        .filter(date.eq(julian_date).and(index.eq(index1 as i32)))
+                        .set(index.eq(-1))
+                        .execute(connection)?;
+
+                    diesel::update(tasks)
+                        .filter(date.eq(julian_date).and(index.eq(index2 as i32)))
+                        .set(index.eq(index1 as i32))
+                        .execute(connection)?;
+
+                    diesel::update(tasks)
+                        .filter(date.eq(julian_date).and(index.eq(-1)))
+                        .set(index.eq(index2 as i32))
+                        .execute(connection)?;
+
+                    diesel::result::QueryResult::Ok(())
+                })
+                .unwrap_or_else(|_| self.1.set(true));
+            Ok(())
+        } else {
+            Err(anyhow!("index out of bounds"))
+        }
+    }
+
     fn tasks_len(&self, d: Date) -> usize {
         use tables::tasks::dsl::*;
 

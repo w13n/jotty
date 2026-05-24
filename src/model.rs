@@ -20,6 +20,9 @@ pub trait Model {
     fn replace_event(&mut self, date: Date, index: usize, event: Event) -> Result<()>;
     fn replace_task(&mut self, date: Date, index: usize, task: Task) -> Result<()>;
 
+    fn swap_event(&mut self, date: Date, index1: usize, index2: usize) -> Result<()>;
+    fn swap_task(&mut self, date: Date, index1: usize, index2: usize) -> Result<()>;
+
     fn events_len(&self, date: Date) -> usize;
     fn tasks_len(&self, date: Date) -> usize;
 

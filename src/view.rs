@@ -174,7 +174,7 @@ impl View {
     }
 
     fn render_help_frame(frame: &mut Frame, area: Rect, ls: &mut ListState) {
-        let [help_area] = Layout::vertical([Constraint::Length(12)])
+        let [help_area] = Layout::vertical([Constraint::Length(13)])
             .flex(Flex::Center)
             .areas(area);
         let [key_area, value_area] =
@@ -188,11 +188,12 @@ impl View {
                 "<t>",
                 "<n> OR <O>",
                 "<o>",
-                "<\' \'>",
+                "SPACE",
                 "<d>",
-                "<ENTER> OR <i>",
+                "ENTER OR <i>",
                 "ARROW OR <h|j|k|l>",
-                "(<SHIFT> + <ARROW>) OR <H|L>",
+                "(SHIFT AND ARROW) OR <H|L>",
+                "(SHIFT AND ARROW>) OR <J|K>",
                 "<c>",
             ]
             .map(|x| {
@@ -215,6 +216,7 @@ impl View {
                 "toggle editing mode for the selected entry",
                 "move the cursor",
                 "move between days",
+                "move an entry up or down",
                 "jump to today's page",
             ]
             .map(Line::from),
@@ -509,6 +511,44 @@ impl View {
                 }
             }
         }
+    }
+
+    pub fn swap_up(&mut self) {
+        if self.model.err().is_ok() && self.help_menu.is_none() {
+            if let Some(idx) = self.events_state.selected() {
+                if idx > 0 {
+                    self.model
+                        .swap_event(self.date, idx, idx - 1)
+                        .expect("idx is greater than zero");
+                }
+            } else if let Some(idx) = self.task_state.selected()
+                && idx > 0
+            {
+                self.model
+                    .swap_task(self.date, idx, idx - 1)
+                    .expect("idx is greater than zero");
+            }
+        }
+        self.move_up();
+    }
+
+    pub fn swap_down(&mut self) {
+        if self.model.err().is_ok() && self.help_menu.is_none() {
+            if let Some(idx) = self.events_state.selected() {
+                if idx + 1 < self.model.events_len(self.date) {
+                    self.model
+                        .swap_event(self.date, idx, idx + 1)
+                        .expect("idx is greater than zero")
+                }
+            } else if let Some(idx) = self.task_state.selected()
+                && idx + 1 < self.model.tasks_len(self.date)
+            {
+                self.model
+                    .swap_task(self.date, idx, idx + 1)
+                    .expect("idx is greater than zero")
+            }
+        }
+        self.move_down();
     }
 
     pub fn is_editing(&self) -> bool {
