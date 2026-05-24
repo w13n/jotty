@@ -4,6 +4,7 @@ use anyhow::Error;
 use ratatui::DefaultTerminal;
 use ratatui::layout::Position;
 use ratatui::prelude::*;
+use ratatui::style::Styled;
 use ratatui::text::Span;
 use ratatui::text::ToSpan;
 use ratatui::widgets::ListItem;
@@ -17,6 +18,7 @@ use ratatui::{
 };
 use time::{Date, OffsetDateTime};
 
+use crate::config::ViewConfig;
 use crate::model::Model;
 use crate::model::{CompletionLevel, Event, Importance, Task};
 
@@ -29,10 +31,11 @@ pub struct View {
     help_menu: Option<ListState>,
     events_state: ListState,
     task_state: ListState,
+    config: ViewConfig,
 }
 
 impl View {
-    pub fn new(model: Box<dyn Model>, terminal: DefaultTerminal) -> Self {
+    pub fn new(model: Box<dyn Model>, terminal: DefaultTerminal, config: ViewConfig) -> Self {
         let date = OffsetDateTime::now_local()
             .unwrap_or(OffsetDateTime::now_utc())
             .date();
@@ -54,6 +57,7 @@ impl View {
             editing: None,
             events_state,
             task_state,
+            config,
         }
     }
 
@@ -78,9 +82,11 @@ impl View {
                     .areas(frame.area());
 
             let title = Line::from(vec![
-                "Jotty".green().bold(),
+                "Jotty".set_style(Style::new().fg(self.config.primary_color).bold()),
                 " entry on ".bold(),
-                self.date.to_string().blue().bold(),
+                self.date
+                    .to_string()
+                    .set_style(Style::new().fg(self.config.secondary_color).bold()),
             ]);
             let instructions = Line::from("<q> to quit; <m> for help menu".gray());
             let container_block = Block::new()
@@ -89,13 +95,14 @@ impl View {
 
             frame.render_widget(container_block, frame.area());
             if let Some(ls) = &mut self.help_menu {
-                View::render_help_frame(frame, middle, ls);
+                View::render_help_frame(frame, middle, ls, self.config)
             } else if self.model.events_len(self.date) != 0 || self.model.tasks_len(self.date) != 0
             {
                 let [events_rect, tasks_rect] =
                     Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
                         .areas(middle);
-                let events_title = Line::from(" Events ".red().bold());
+                let events_title =
+                    Line::from(" Events ").style(Style::new().fg(self.config.event_color).bold());
                 let events_block = Block::bordered()
                     .title(events_title.centered())
                     .border_set(border::ROUNDED);
@@ -106,9 +113,10 @@ impl View {
                     .map(|x| ListItem::new(format_events(x)))
                     .collect::<List>()
                     .block(events_block)
-                    .highlight_style(Style::new().fg(Color::Red));
+                    .highlight_style(Style::new().fg(self.config.event_color));
 
-                let task_title = Line::from(" Tasks ".yellow().bold());
+                let task_title =
+                    Line::from(" Tasks ").style(Style::new().fg(self.config.task_color).bold());
                 let task_block = Block::bordered()
                     .title(task_title.centered())
                     .border_set(border::ROUNDED);
@@ -118,7 +126,7 @@ impl View {
                     .map(|x| ListItem::new(format_tasks(x)))
                     .collect::<List>()
                     .block(task_block)
-                    .highlight_style(Style::new().fg(Color::Yellow));
+                    .highlight_style(Style::new().fg(self.config.task_color));
 
                 frame.render_stateful_widget(events_widget, events_rect, &mut self.events_state);
                 frame.render_stateful_widget(task_widget, tasks_rect, &mut self.task_state);
@@ -173,7 +181,7 @@ impl View {
         Ok(())
     }
 
-    fn render_help_frame(frame: &mut Frame, area: Rect, ls: &mut ListState) {
+    fn render_help_frame(frame: &mut Frame, area: Rect, ls: &mut ListState, config: ViewConfig) {
         let [help_area] = Layout::vertical([Constraint::Length(13)])
             .flex(Flex::Center)
             .areas(area);
@@ -202,7 +210,7 @@ impl View {
                     .alignment(Alignment::Right)
             }),
         )
-        .highlight_style(Style::new().fg(Color::Green));
+        .highlight_style(Style::new().fg(config.primary_color));
         let value_list = List::from_iter(
             [
                 "quit jotty",
@@ -221,7 +229,7 @@ impl View {
             ]
             .map(Line::from),
         )
-        .highlight_style(Style::new().fg(Color::Blue));
+        .highlight_style(Style::new().fg(config.secondary_color));
 
         frame.render_stateful_widget(key_list, key_area, ls);
         frame.render_stateful_widget(value_list, value_area, ls);
