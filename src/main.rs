@@ -18,7 +18,6 @@ use crate::view::View;
 fn main() -> Result<()> {
     let args = cli::Cli::parse();
     let config = Config::new(args.config_path);
-    println!("{:#?}", &config);
     let terminal = ratatui::init();
     let mut controller = get_controller(config, terminal, args.ephemeral);
     controller.run()?;

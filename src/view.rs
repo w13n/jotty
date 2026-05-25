@@ -123,7 +123,7 @@ impl View {
                 let task_widget = self
                     .model
                     .tasks_iter(self.date)
-                    .map(|x| ListItem::new(format_tasks(x)))
+                    .map(|x| ListItem::new(format_tasks(x, self.config.strike_completed)))
                     .collect::<List>()
                     .block(task_block)
                     .highlight_style(Style::new().fg(self.config.task_color));
@@ -169,7 +169,8 @@ impl View {
                 let background_text = Paragraph::new(if let Some(msg) = &self.bg_message {
                     Text::from_iter([
                         "no entries or tasks yet today".to_span(),
-                        msg.as_str().bold().magenta(),
+                        msg.as_str()
+                            .set_style(Style::new().fg(self.config.secondary_color).bold()),
                     ])
                 } else {
                     Text::from("no entries or tasks yet today")
@@ -616,16 +617,17 @@ impl View {
     }
 }
 
-fn format_tasks(task: Task) -> String {
+fn format_tasks(task: Task, strike_completed: bool) -> Span<'static> {
     match task.completion_level {
-        CompletionLevel::None => {
-            format!(" ○ {}", task.title)
-        }
-        CompletionLevel::Partial => {
-            format!(" ◐ {}", task.title)
-        }
+        CompletionLevel::None => format!(" ○ {}", task.title).into(),
+        CompletionLevel::Partial => format!(" ◐ {}", task.title).into(),
         CompletionLevel::Full => {
-            format!(" ● {}", task.title)
+            let str = format!(" ● {}", task.title);
+            if strike_completed {
+                str.bold().crossed_out()
+            } else {
+                str.into()
+            }
         }
     }
 }
@@ -634,5 +636,6 @@ fn format_events(event: Event) -> Span<'static> {
     match event.importance {
         Importance::Normal => Span::from(event.title),
         Importance::High => event.title.bold(),
+        Importance::Extreme => event.title.bold().underlined(),
     }
 }

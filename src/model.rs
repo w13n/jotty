@@ -67,13 +67,15 @@ pub enum Importance {
     #[default]
     Normal,
     High,
+    Extreme,
 }
 
 impl Importance {
     pub fn cycle(self) -> Self {
         match self {
-            Importance::High => Importance::Normal,
             Importance::Normal => Importance::High,
+            Importance::High => Importance::Extreme,
+            Importance::Extreme => Importance::Normal,
         }
     }
 }

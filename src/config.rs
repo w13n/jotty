@@ -18,6 +18,7 @@ pub struct ViewConfig {
     pub secondary_color: Color,
     pub event_color: Color,
     pub task_color: Color,
+    pub strike_completed: bool,
 }
 
 impl Config {
@@ -76,8 +77,6 @@ impl Default for Config {
             path.push("v1.db");
             path
         });
-        eprintln!("{:?}", db_path);
-
         Self {
             db_path,
             view: ViewConfig::default(),
@@ -92,6 +91,7 @@ impl Default for ViewConfig {
             secondary_color: Color::Blue,
             event_color: Color::Red,
             task_color: Color::Yellow,
+            strike_completed: true,
         }
     }
 }
@@ -100,7 +100,6 @@ fn create_file_if_not_exists(path: &PathBuf) -> std::io::Result<()> {
     if let Some(parent) = path.parent() {
         create_dir_all(parent)?;
     }
-    println!("HERE {path:?}");
     OpenOptions::new()
         .write(true)
         .create(true)

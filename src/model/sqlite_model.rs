@@ -394,6 +394,7 @@ impl SQLEvent {
             importance: match self.importance {
                 0 => Importance::Normal,
                 1 => Importance::High,
+                2 => Importance::Extreme,
                 _ => panic!("db out of sync"),
             },
         }
@@ -403,6 +404,7 @@ impl SQLEvent {
         let importance = match e.importance {
             Importance::Normal => 0,
             Importance::High => 1,
+            Importance::Extreme => 2,
         };
 
         Self {
