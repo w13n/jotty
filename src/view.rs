@@ -1,6 +1,5 @@
-use std::io::Result;
+use time::{Date, OffsetDateTime};
 
-use anyhow::Error;
 use ratatui::DefaultTerminal;
 use ratatui::layout::Position;
 use ratatui::prelude::*;
@@ -16,11 +15,14 @@ use ratatui::{
     text::{Line, Text},
     widgets::{Block, List, Paragraph, Wrap},
 };
-use time::{Date, OffsetDateTime};
+use thiserror::Error;
 
 use crate::config::ViewConfig;
+use crate::model;
 use crate::model::Model;
 use crate::model::{CompletionLevel, Event, Importance, Task};
+
+type Result<R> = std::result::Result<R, Error>;
 
 pub struct View {
     terminal: DefaultTerminal,
@@ -67,14 +69,6 @@ impl View {
     }
 
     pub fn render(&mut self) -> Result<()> {
-        if let Err(e) = self.model.err() {
-            self.render_err(&e)
-        } else {
-            self.render_default()
-        }
-    }
-
-    fn render_default(&mut self) -> Result<()> {
         self.terminal.draw(|frame| {
             let [_top, middle, _bottom] =
                 Layout::vertical([Constraint::Max(1), Constraint::Min(1), Constraint::Max(1)])
@@ -236,7 +230,7 @@ impl View {
         frame.render_stateful_widget(value_list, value_area, ls);
     }
 
-    fn render_err(&mut self, err: &Error) -> Result<()> {
+    pub fn render_err(&mut self, err: &Error) -> Result<()> {
         self.terminal.draw(|frame| {
             let title = Line::from(" Jotty Error ".red().bold());
             let container_block = Block::new()
@@ -254,33 +248,29 @@ impl View {
     }
 
     pub fn move_up(&mut self) {
-        if self.model.err().is_ok() {
-            self.editing = None;
-            if let Some(ls) = &mut self.help_menu {
-                ls.select_previous();
-            } else if self.events_state.selected().is_some() {
-                self.events_state.select_previous();
-            } else if self.task_state.selected().is_some() {
-                self.task_state.select_previous();
-            }
+        self.editing = None;
+        if let Some(ls) = &mut self.help_menu {
+            ls.select_previous();
+        } else if self.events_state.selected().is_some() {
+            self.events_state.select_previous();
+        } else if self.task_state.selected().is_some() {
+            self.task_state.select_previous();
         }
     }
 
     pub fn move_down(&mut self) {
-        if self.model.err().is_ok() {
-            self.editing = None;
-            if let Some(ls) = &mut self.help_menu {
-                ls.select_next();
-            } else if self.events_state.selected().is_some() {
-                self.events_state.select_next();
-            } else if self.task_state.selected().is_some() {
-                self.task_state.select_next();
-            }
+        self.editing = None;
+        if let Some(ls) = &mut self.help_menu {
+            ls.select_next();
+        } else if self.events_state.selected().is_some() {
+            self.events_state.select_next();
+        } else if self.task_state.selected().is_some() {
+            self.task_state.select_next();
         }
     }
 
     pub fn move_left(&mut self) {
-        if self.model.err().is_ok() && self.help_menu.is_none() {
+        if self.help_menu.is_none() {
             self.editing = None;
             if self.task_state.selected().is_some() && self.model.events_len(self.date) > 0 {
                 self.events_state.select(self.task_state.selected());
@@ -290,7 +280,7 @@ impl View {
     }
 
     pub fn move_right(&mut self) {
-        if self.model.err().is_ok() && self.help_menu.is_none() {
+        if self.help_menu.is_none() {
             self.editing = None;
             if self.events_state.selected().is_some() && self.model.tasks_len(self.date) > 0 {
                 self.task_state.select(self.events_state.selected());
@@ -299,39 +289,31 @@ impl View {
         }
     }
 
-    pub fn cycle(&mut self) {
-        if self.model.err().is_ok() && self.help_menu.is_none() {
+    pub fn cycle(&mut self) -> Result<()> {
+        if self.help_menu.is_none() {
             self.editing = None;
             if let Some(idx) = self.task_state.selected() {
-                let cycled_task = self
-                    .model
-                    .get_task(self.date, idx)
-                    .expect("selected cannot be out of bounds")
-                    .cycle();
-                self.model
-                    .replace_task(self.date, idx, cycled_task)
-                    .expect("selected cannot be out of bounds");
+                let cycled_task = self.model.get_task(self.date, idx)?.cycle();
+                Ok(self.model.replace_task(self.date, idx, cycled_task)?)
             } else if let Some(idx) = self.events_state.selected() {
-                let cycled_event = self
-                    .model
-                    .get_event(self.date, idx)
-                    .expect("selected cannot be out of bounds")
-                    .cycle();
-                self.model
-                    .replace_event(self.date, idx, cycled_event)
-                    .expect("selected cannot be out of bounds");
+                let cycled_event = self.model.get_event(self.date, idx)?.cycle();
+                Ok(self.model.replace_event(self.date, idx, cycled_event)?)
+            } else {
+                Ok(())
             }
+        } else {
+            Ok(())
         }
     }
 
     pub fn move_to_next(&mut self) {
-        if self.model.err().is_ok() && self.help_menu.is_none() {
+        if self.help_menu.is_none() {
             self.move_to(self.date.next_day().expect("we will never reach max date"));
         }
     }
 
     pub fn move_to_prev(&mut self) {
-        if self.model.err().is_ok() && self.help_menu.is_none() {
+        if self.help_menu.is_none() {
             self.move_to(
                 self.date
                     .previous_day()
@@ -341,7 +323,7 @@ impl View {
     }
 
     pub fn move_to_today(&mut self) {
-        if self.model.err().is_ok() && self.help_menu.is_none() {
+        if self.help_menu.is_none() {
             self.move_to(
                 OffsetDateTime::now_local()
                     .unwrap_or(OffsetDateTime::now_utc())
@@ -372,136 +354,127 @@ impl View {
         }
     }
 
-    pub fn toggle_editing_mode(&mut self) {
-        if self.model.err().is_ok() && self.help_menu.is_none() {
+    pub fn toggle_editing_mode(&mut self) -> Result<()> {
+        if self.help_menu.is_none() {
             if self.editing.is_none()
-                && let Some(editing_str) = self.get_editing_string()
+                && let Some(editing_str) = self.get_editing_string()?
             {
                 self.editing = Some(editing_str.len());
             } else {
                 self.editing = None;
             }
         }
+
+        Ok(())
     }
 
     pub fn exit_mode(&mut self) {
-        if self.model.err().is_ok() {
-            if self.help_menu.is_some() {
-                self.help_menu = None;
-            } else {
-                self.editing = None;
-            }
+        if self.help_menu.is_some() {
+            self.help_menu = None;
+        } else {
+            self.editing = None;
         }
     }
 
     pub fn move_cursor_left(&mut self) {
-        if self.model.err().is_ok() && self.help_menu.is_none() {
+        if self.help_menu.is_none() {
             self.editing = self.editing.map(|x| if x > 0 { x - 1 } else { x });
         }
     }
 
-    pub fn move_cursor_right(&mut self) {
-        if self.model.err().is_ok()
-            && self.help_menu.is_none()
-            && let Some(len) = self.get_editing_string().map(|x| x.len())
+    pub fn move_cursor_right(&mut self) -> Result<()> {
+        if self.help_menu.is_none()
+            && let Some(len) = self.get_editing_string()?.map(|x| x.len())
         {
             self.editing = self.editing.map(|x| if x < len { x + 1 } else { x });
         }
+        Ok(())
     }
 
-    pub fn insert_char(&mut self, c: char) {
-        if self.model.err().is_ok()
-            && self.help_menu.is_none()
+    pub fn insert_char(&mut self, c: char) -> Result<()> {
+        if self.help_menu.is_none()
             && let Some(idx) = self.editing
         {
             let mut new_str = self
-                .get_editing_string()
+                .get_editing_string()?
                 .expect("editing has some")
                 .to_string();
             new_str.insert(idx, c);
-            self.update_editing_string(new_str);
+            self.update_editing_string(new_str)?;
             self.editing = self.editing.map(|x| x + 1);
         }
+        Ok(())
     }
 
-    pub fn delete_char(&mut self) {
-        if self.model.err().is_ok()
-            && self.help_menu.is_none()
+    pub fn delete_char(&mut self) -> Result<()> {
+        if self.help_menu.is_none()
             && let Some(editing) = self.editing
-            && let Some(str) = self.get_editing_string()
+            && let Some(str) = self.get_editing_string()?
             && editing > 0
         {
             let mut new_str = str.to_string();
             new_str.remove(editing - 1);
-            self.update_editing_string(new_str);
+            self.update_editing_string(new_str)?;
             self.editing = self.editing.map(|x| x - 1);
         }
+        Ok(())
     }
 
-    pub fn append_new_event(&mut self) {
-        if self.model.err().is_ok() && self.help_menu.is_none() {
+    pub fn append_new_event(&mut self) -> Result<()> {
+        if self.help_menu.is_none() {
             let idx = self.model.events_len(self.date);
-            self.model
-                .new_event(self.date, idx)
-                .expect("idx was set based on length");
+            self.model.new_event(self.date, idx, Event::default())?;
             self.events_state.selected_mut().replace(idx);
             self.task_state.selected_mut().take();
             self.editing = Some(0);
         }
+        Ok(())
     }
 
-    pub fn append_new_task(&mut self) {
-        if self.model.err().is_ok() && self.help_menu.is_none() {
+    pub fn append_new_task(&mut self) -> Result<()> {
+        if self.help_menu.is_none() {
             let idx = self.model.tasks_len(self.date);
-            self.model
-                .new_task(self.date, idx)
-                .expect("idx was set based on length");
+            self.model.new_task(self.date, idx, Task::default())?;
             self.task_state.selected_mut().replace(idx);
             self.events_state.selected_mut().take();
             self.editing = Some(0);
         }
+        Ok(())
     }
 
-    pub fn insert_above_new_item(&mut self) {
-        if self.model.err().is_ok() && self.help_menu.is_none() {
+    pub fn insert_above_new_item(&mut self) -> Result<()> {
+        if self.help_menu.is_none() {
             if let Some(idx) = self.events_state.selected() {
-                self.model
-                    .new_event(self.date, idx)
-                    .expect("idx was set based on selected");
+                self.model.new_event(self.date, idx, Event::default())?;
                 self.editing = Some(0);
             } else if let Some(idx) = self.task_state.selected() {
-                self.model
-                    .new_task(self.date, idx)
-                    .expect("idx was set based on selected");
+                self.model.new_task(self.date, idx, Task::default())?;
                 self.editing = Some(0);
             }
         }
+        Ok(())
     }
 
-    pub fn insert_below_new_item(&mut self) {
-        if self.model.err().is_ok() && self.help_menu.is_none() {
+    pub fn insert_below_new_item(&mut self) -> Result<()> {
+        if self.help_menu.is_none() {
             if let Some(idx) = self.events_state.selected() {
-                self.model
-                    .new_event(self.date, idx + 1)
-                    .expect("idx was set based on selected");
+                self.model.new_event(self.date, idx + 1, Event::default())?;
                 self.events_state.select(Some(idx + 1));
                 self.editing = Some(0);
             } else if let Some(idx) = self.task_state.selected() {
-                self.model
-                    .new_task(self.date, idx + 1)
-                    .expect("idx was set based on selected");
+                self.model.new_task(self.date, idx + 1, Task::default())?;
                 self.task_state.select(Some(idx + 1));
                 self.editing = Some(0);
             }
         }
+        Ok(())
     }
-    pub fn delete(&mut self) {
-        if self.model.err().is_ok() && self.help_menu.is_none() {
+
+    pub fn delete(&mut self) -> Result<()> {
+        if self.help_menu.is_none() {
             self.editing = None;
             if let Some(idx) = self.events_state.selected() {
-                self.model
-                    .delete_event(self.date, idx)
-                    .expect("the item is selected");
+                self.model.delete_event(self.date, idx)?;
                 if self.model.events_len(self.date) == 0 {
                     self.events_state.select(None);
                     if self.model.tasks_len(self.date) > 0 {
@@ -509,9 +482,7 @@ impl View {
                     }
                 }
             } else if let Some(idx) = self.task_state.selected() {
-                self.model
-                    .delete_task(self.date, idx)
-                    .expect("the item is selected");
+                self.model.delete_task(self.date, idx)?;
                 if self.model.tasks_len(self.date) == 0 {
                     self.task_state.select(None);
                     if self.model.events_len(self.date) > 0 {
@@ -520,92 +491,66 @@ impl View {
                 }
             }
         }
+        Ok(())
     }
 
-    pub fn swap_up(&mut self) {
-        if self.model.err().is_ok() && self.help_menu.is_none() {
+    pub fn swap_up(&mut self) -> Result<()> {
+        if self.help_menu.is_none() {
             if let Some(idx) = self.events_state.selected() {
                 if idx > 0 {
-                    self.model
-                        .swap_event(self.date, idx, idx - 1)
-                        .expect("idx is greater than zero");
+                    self.model.swap_event(self.date, idx, idx - 1)?;
                 }
             } else if let Some(idx) = self.task_state.selected()
                 && idx > 0
             {
-                self.model
-                    .swap_task(self.date, idx, idx - 1)
-                    .expect("idx is greater than zero");
+                self.model.swap_task(self.date, idx, idx - 1)?;
             }
         }
         self.move_up();
+        Ok(())
     }
 
-    pub fn swap_down(&mut self) {
-        if self.model.err().is_ok() && self.help_menu.is_none() {
+    pub fn swap_down(&mut self) -> Result<()> {
+        if self.help_menu.is_none() {
             if let Some(idx) = self.events_state.selected() {
                 if idx + 1 < self.model.events_len(self.date) {
-                    self.model
-                        .swap_event(self.date, idx, idx + 1)
-                        .expect("idx is greater than zero")
+                    self.model.swap_event(self.date, idx, idx + 1)?;
                 }
             } else if let Some(idx) = self.task_state.selected()
                 && idx + 1 < self.model.tasks_len(self.date)
             {
-                self.model
-                    .swap_task(self.date, idx, idx + 1)
-                    .expect("idx is greater than zero")
+                self.model.swap_task(self.date, idx, idx + 1)?;
             }
         }
         self.move_down();
+        Ok(())
     }
 
     pub fn is_editing(&self) -> bool {
-        if self.model.err().is_err() {
-            return false;
-        }
         self.editing.is_some()
     }
 
-    fn get_editing_string(&mut self) -> Option<String> {
+    fn get_editing_string(&mut self) -> Result<Option<String>> {
         if let Some(row_idx) = self.events_state.selected() {
-            return Some(
-                self.model
-                    .get_event(self.date, row_idx)
-                    .expect("selected cannot be out of range")
-                    .title,
-            );
+            Ok(Some(self.model.get_event(self.date, row_idx)?.title))
         } else if let Some(row_idx) = self.task_state.selected() {
-            return Some(
-                self.model
-                    .get_task(self.date, row_idx)
-                    .expect("selected cannot be out of range")
-                    .title,
-            );
+            Ok(Some(self.model.get_task(self.date, row_idx)?.title))
+        } else {
+            Ok(None)
         }
-        None
     }
 
-    fn update_editing_string(&mut self, string: String) {
+    fn update_editing_string(&mut self, string: String) -> Result<()> {
         if let Some(idx) = self.task_state.selected() {
-            let mut new_task = self
-                .model
-                .get_task(self.date, idx)
-                .expect("selected cannot be out of bounds");
+            let mut new_task = self.model.get_task(self.date, idx)?;
             new_task.title = string;
-            self.model
-                .replace_task(self.date, idx, new_task)
-                .expect("selected cannot be out of bounds");
+            self.model.replace_task(self.date, idx, new_task)?;
         } else if let Some(idx) = self.events_state.selected() {
-            let mut new_event = self
-                .model
-                .get_event(self.date, idx)
-                .expect("selected cannot be out of bounds");
+            let mut new_event = self.model.get_event(self.date, idx)?;
             new_event.title = string;
-            self.model
-                .replace_event(self.date, idx, new_event)
-                .expect("selected cannot be out of bounds");
+            self.model.replace_event(self.date, idx, new_event)?;
         }
+        Ok(())
     }
 
     pub fn toggle_help(&mut self) {
@@ -614,6 +559,24 @@ impl View {
         } else {
             self.help_menu = Some(ListState::default().with_selected(Some(0)));
         }
+    }
+
+    pub fn exit(&mut self) {
+        let _ = self.terminal.draw(|frame| {
+            let title = Line::from(" Exiting ".red().bold());
+            let container_block = Block::new()
+                .title(title.centered())
+                .border_set(border::ROUNDED);
+
+            let container =
+                Paragraph::new("exiting now. Please wait for us to finish saving your work first")
+                    .centered()
+                    .block(container_block)
+                    .wrap(Wrap { trim: true });
+
+            frame.render_widget(container, frame.area());
+        });
+        self.model.exit()
     }
 }
 
@@ -638,4 +601,12 @@ fn format_events(event: Event) -> Span<'static> {
         Importance::High => event.title.bold(),
         Importance::Extreme => event.title.bold().underlined(),
     }
+}
+
+#[derive(Error, Debug)]
+pub enum Error {
+    #[error("model error: {0}")]
+    Model(#[from] model::Error),
+    #[error("render error: {0}")]
+    Render(#[from] std::io::Error),
 }

@@ -1,15 +1,19 @@
-pub mod mem_model;
-pub mod sqlite_model;
+pub mod memory;
 
-pub use mem_model::MemModel;
-pub use sqlite_model::SqliteModel;
-
-use anyhow::Result;
 use time::Date;
 
+use thiserror::Error;
+
+use crate::datastore::{self, Controller};
+
+type Result<R> = std::result::Result<R, Error>;
+
 pub trait Model {
-    fn new_event(&mut self, date: Date, index: usize) -> Result<()>;
-    fn new_task(&mut self, date: Date, index: usize) -> Result<()>;
+    fn set_datastore(&mut self, datastore: Box<dyn Controller>);
+    fn exit(&mut self);
+
+    fn new_event(&mut self, date: Date, index: usize, event: Event) -> Result<()>;
+    fn new_task(&mut self, date: Date, index: usize, task: Task) -> Result<()>;
 
     fn delete_event(&mut self, date: Date, index: usize) -> Result<()>;
     fn delete_task(&mut self, date: Date, index: usize) -> Result<()>;
@@ -28,8 +32,6 @@ pub trait Model {
 
     fn events_iter<'a>(&'a self, date: Date) -> Box<dyn Iterator<Item = Event> + 'a>;
     fn tasks_iter<'a>(&'a self, date: Date) -> Box<dyn Iterator<Item = Task> + 'a>;
-
-    fn err(&self) -> Result<()>;
 }
 
 #[derive(Default, Debug, Hash, Clone)]
@@ -96,4 +98,14 @@ impl CompletionLevel {
             CompletionLevel::Full => CompletionLevel::None,
         }
     }
+}
+
+#[derive(Error, Debug)]
+pub enum Error {
+    #[error("data store error: {0}")]
+    Datastore(#[from] datastore::Error),
+    #[error("index out of bounds for insertion: index {0} is out of bounds for {1} elements")]
+    NewIndexOutOfBounds(usize, usize),
+    #[error("index out of bounds for modification: index {0} is out of bounds for {1} elements")]
+    ExistingIndexOutOfBounds(usize, usize),
 }
